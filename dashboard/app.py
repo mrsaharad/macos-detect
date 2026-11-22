@@ -45,6 +45,10 @@ TACTICS = [("discovery", "Discovery"), ("execution", "Execution"), ("persistence
 TACTIC_NAME = dict(TACTICS)
 VERDICT = {"tp": ("True positive", "#e9a4a6"), "fp": ("False positive", "#9fc3a9")}
 RANGES = {"15m": 15, "1h": 60, "6h": 360, "24h": 1440}
+# หน้า Alerts / Event search: ช่วงเวลา (today = ตั้งแต่ 00:00 ของวันนี้ ตามเวลาไทย) และจำนวนแถวต่อหน้า
+PERIODS = {"today": "Today", "24h": "24 hours", "48h": "48 hours", "1w": "1 week"}
+PERIOD_HOURS = {"24h": 24, "48h": 48, "1w": 168}
+PER_PAGE = {"10": "10", "20": "20", "50": "50"}
 
 st.set_page_config(page_title="macOS Detect", page_icon=":material/shield:", layout="wide",
                    initial_sidebar_state="collapsed")
@@ -159,6 +163,61 @@ def link(**changes):
         else:
             p[k] = val
     return "?" + urlencode(p)
+
+
+def choice(name, options, default):
+    """ค่าจาก query string ที่ต้องอยู่ในตัวเลือกที่กำหนด (ค่าแปลกๆ = ใช้ค่าเริ่มต้น)"""
+    v = st.query_params.get(name, default)
+    return v if v in options else default
+
+
+def period_start(key):
+    """เวลาเริ่มของช่วงที่เลือก (UTC) — today = 00:00 ของวันนี้ตามเวลาไทย"""
+    now = pd.Timestamp.now(tz=TZ)
+    start = now.normalize() if key == "today" else now - pd.Timedelta(hours=PERIOD_HOURS[key])
+    return start.tz_convert("UTC")
+
+
+def paging(total, per):
+    """คืน (หน้าปัจจุบัน, จำนวนหน้า, แถวเริ่ม) — หน้าเกินจำนวนจริงจะถูกปัดลง"""
+    pages = max(1, -(-total // per))
+    p = st.query_params.get("p", "1")
+    page = min(int(p), pages) if p.isdigit() and int(p) > 0 else 1
+    return page, pages, (page - 1) * per
+
+
+def seg(name, options, current, label):
+    """ปุ่มเลือกแบบกลุ่ม (เหมือนช่วงเวลาในหน้า Overview) — เปลี่ยนค่าแล้วกลับไปหน้า 1"""
+    links = "".join(f'<a href="{link(**{name: k}, p=None, id=None)}" target="_self" class="{"on" if k == current else ""}"'
+                    f'{" aria-current=true" if k == current else ""}>{lbl}</a>' for k, lbl in options.items())
+    return f'<nav class="seg" aria-label="{label}">{links}</nav>'
+
+
+def toolbar(period, per):
+    return (f'<div class="toolbar">{seg("period", PERIODS, period, "Time range")}'
+            f'<span class="lbl">Rows</span>{seg("per", PER_PAGE, str(per), "Rows per page")}</div>')
+
+
+def pager(total, page, pages, per, offset):
+    """แถบล่างตาราง: แสดงช่วงแถว + ปุ่มหน้า ‹ 1 … 4 5 6 … 20 ›"""
+    shown = f"Showing {offset + 1:,}–{min(offset + per, total):,} of {total:,}" if total else "No results"
+    nums = sorted({1, pages, *range(max(1, page - 2), min(pages, page + 2) + 1)})
+    items, prev = [], 0
+    for n in nums:
+        if n - prev > 1:
+            items.append('<span class="gap">…</span>')
+        on = n == page
+        items.append(f'<a href="{link(p=n if n > 1 else None, id=None)}" target="_self" class="{"on" if on else ""}"'
+                     f'{" aria-current=page" if on else ""}>{n}</a>')
+        prev = n
+
+    def arrow(target, text, label):
+        if 1 <= target <= pages and target != page:
+            return f'<a href="{link(p=target if target > 1 else None, id=None)}" target="_self" aria-label="{label}">{text}</a>'
+        return f'<a class="dis" aria-disabled="true" aria-label="{label}">{text}</a>'
+
+    nav = arrow(page - 1, "‹", "Previous page") + "".join(items) + arrow(page + 1, "›", "Next page")
+    return f'<div class="pager num"><span>{shown}</span><nav class="pages" aria-label="Pages">{nav}</nav></div>'
 
 
 def local(t, fmt="%H:%M:%S"):
@@ -325,6 +384,15 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .app a.chip.off{background:transparent;border-style:dashed;color:#8a91a1}
 .app a.chip.sel{border-color:#5b5294;background:#2a2640}
 .sp{flex:1}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.toolbar .lbl{font-size:13px;color:var(--muted);margin-left:4px}
+.pager{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+.pages{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.app .pages a{min-width:32px;height:32px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid var(--line);color:var(--soft);font-weight:500;cursor:pointer}
+.app .pages a:hover{color:var(--text);border-color:#3a4050}
+.app .pages a.on{background:#2a2640;border-color:#5b5294;color:#f1f2f5}
+.app .pages a.dis{opacity:.35;cursor:default;pointer-events:none}
+.pages .gap{padding:0 4px}
 
 .detail>div{padding:18px 24px;border-bottom:1px solid var(--line)}
 .detail>div:last-child{border-bottom:none}
@@ -481,8 +549,11 @@ def alerts_body(a):
     off = set(filter(None, qp.get("off", "").split(",")))
     status = qp.get("status", "all")
     text = qp.get("q", "").strip()
+    period = choice("period", PERIODS, "24h")
+    per = int(choice("per", PER_PAGE, "20"))
     view = a
     if len(a):
+        a = a[a["t"] >= period_start(period)]          # ช่วงเวลาที่เลือก (ตัวเลขหัวหน้าก็นับตามช่วงนี้)
         view = a[~a["level"].isin(off)]
         if status == "open":
             view = view[view["verdict"].isna()]
@@ -493,17 +564,20 @@ def alerts_body(a):
                    + " " + view["TargetFilename"].fillna("") + " " + view["technique"].fillna("") + " " + view["rule_id"])
             view = view[hay.str.contains(re.escape(text), case=False)]
     open_n = int(a["verdict"].isna().sum()) if len(a) else 0
-    head = (f'<header class="head"><div><h1>Alerts</h1><p>{len(a):,} alerts, {open_n:,} awaiting review</p></div></header>')
+    when = "today" if period == "today" else f"in the last {PERIODS[period].lower()}"
+    head = (f'<header class="head"><div><h1>Alerts</h1><p>{len(a):,} alerts {when}, {open_n:,} awaiting review</p></div>'
+            f'{toolbar(period, per)}</header>')
 
     chips = ""
     for s in SEV_ORDER:
         nxt = off ^ {s}
-        chips += (f'<a class="chip {"off" if s in off else ""}" target="_self" href="{link(off=",".join(sorted(nxt)) or None, id=None)}" '
+        chips += (f'<a class="chip {"off" if s in off else ""}" target="_self" href="{link(off=",".join(sorted(nxt)) or None, id=None, p=None)}" '
                   f'aria-pressed="{"false" if s in off else "true"}"><span class="sq" style="background:{SEV[s][1]};margin:0"></span>{SEV[s][0]}</a>')
     stat_chips = "".join(
-        f'<a class="chip {"sel" if status == k else ""}" target="_self" href="{link(status=None if k == "all" else k, id=None)}">{lbl}</a>'
+        f'<a class="chip {"sel" if status == k else ""}" target="_self" href="{link(status=None if k == "all" else k, id=None, p=None)}">{lbl}</a>'
         for k, lbl in [("all", "All"), ("open", "Open"), ("tp", "True positive"), ("fp", "False positive")])
-    hidden = "".join(f'<input type="hidden" name="{k}" value="{e(qp[k])}">' for k in ("page", "off", "status") if qp.get(k))
+    hidden = "".join(f'<input type="hidden" name="{k}" value="{e(qp[k])}">'
+                     for k in ("page", "off", "status", "period", "per") if qp.get(k))
     if "page" not in qp:
         hidden += '<input type="hidden" name="page" value="alerts">'
     filters = (f'<div class="filters"><form class="search" method="get" role="search">{hidden}'
@@ -513,14 +587,17 @@ def alerts_body(a):
                f'<span class="sp"></span>{stat_chips}</div>')
 
     if not len(view):
-        msg = "No alerts yet. The collector is watching this Mac." if not len(a) else "No alerts match these filters."
+        msg = (f"No alerts {when}. The collector is watching this Mac." if not len(a)
+               else "No alerts match these filters.")
         return head + filters + f'<section class="panel"><div class="empty">{msg}</div></section>'
 
+    page, pages, offset = paging(len(view), per)
+    shown = view.iloc[offset:offset + per]
     sel_id = qp.get("id")
-    ids = list(view["id"].astype(int))
-    sel = int(sel_id) if sel_id and sel_id.isdigit() and int(sel_id) in ids else ids[0]
+    ids = set(view["id"].astype(int))
+    sel = int(sel_id) if sel_id and sel_id.isdigit() and int(sel_id) in ids else int(shown["id"].iloc[0])
     rows = ""
-    for _, r in view.head(300).iterrows():
+    for _, r in shown.iterrows():
         href = link(id=int(r["id"]))
         v = r["verdict"]
         vtxt, vcol = VERDICT[v] if v in VERDICT else ("Open", "var(--muted)")
@@ -531,7 +608,7 @@ def alerts_body(a):
                  f'<td><a class="cover" href="{href}" target="_self"><div style="font-weight:500">{e(r["title"])}</div>'
                  f'<div class="sub">{e(sub)}</div></a></td>'
                  f'<td style="white-space:nowrap;font-size:13px;color:{vcol}"><a class="cover" href="{href}" target="_self">{vtxt}</a></td></tr>')
-    more = f'<div class="empty" style="padding:12px">Showing the newest 300 of {len(view):,}</div>' if len(view) > 300 else ""
+    more = pager(len(view), page, pages, per, offset)
     listing = (f'<section class="panel" style="flex:999 1 480px;min-width:0;overflow:hidden" aria-label="Alert list">'
                f'<div class="scroll"><table class="t" style="min-width:520px"><thead><tr><th style="width:84px">Time</th>'
                f'<th style="width:84px">Severity</th><th>Detection</th><th style="width:110px">Status</th></tr></thead>'
@@ -577,27 +654,34 @@ def events_body():
     text = qp.get("q", "").strip()
     all_types = ["exec", "fork", "create", "rename", "unlink"]
     types = [t for t in qp.get("types", "exec").split(",") if t in all_types] or ["exec"]
-    where = ["event_type IN (%s)" % ",".join("?" * len(types))]
-    params = list(types)
+    period = choice("period", PERIODS, "24h")
+    per = int(choice("per", PER_PAGE, "20"))
+    # ts_event เก็บเป็นข้อความ ISO (UTC) จึงเทียบเป็นข้อความได้และใช้ index idx_events_ts
+    where = ["event_type IN (%s)" % ",".join("?" * len(types)), "ts_event >= ?"]
+    params = list(types) + [period_start(period).strftime("%Y-%m-%dT%H:%M:%S")]
     if text:
         where.append("(Image LIKE ? OR CommandLine LIKE ? OR TargetFilename LIKE ? OR ParentImage LIKE ?)")
         params += [f"%{text}%"] * 4
+    cond = " AND ".join(where)
+    matches = int(q(f"SELECT COUNT(*) n FROM events WHERE {cond}", params)["n"][0])
+    page, pages, offset = paging(matches, per)
     df = q(f"SELECT ts_event, event_type, pid, ppid, Image, ParentImage, CommandLine, TargetFilename FROM events "
-           f"WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT 300", params)
+           f"WHERE {cond} ORDER BY id DESC LIMIT ? OFFSET ?", params + [per, offset])
     total = int(q("SELECT COUNT(*) n FROM events")["n"][0])
     head = (f'<header class="head"><div><h1>Event search</h1><p>Every event the collector stored ({total:,} in total). '
-            f'Use it to trace activity or find what the rules missed.</p></div>'
-            f'<a class="chip" href="{link()}">{icon("refresh", 16)}Refresh</a></header>')
+            f'Use it to trace activity or find what the rules missed.</p></div>{toolbar(period, per)}</header>')
     chips = ""
     for t in all_types:
         nxt = [x for x in all_types if (x in types) != (x == t)]
         chips += (f'<a class="chip {"sel" if t in types else "off"}" target="_self" '
-                  f'href="{link(types=",".join(nxt) or "exec")}">{t}</a>')
+                  f'href="{link(types=",".join(nxt) or "exec", p=None)}">{t}</a>')
     hidden = '<input type="hidden" name="page" value="events">' + (
-        f'<input type="hidden" name="types" value="{e(",".join(types))}">')
+        f'<input type="hidden" name="types" value="{e(",".join(types))}">') + "".join(
+        f'<input type="hidden" name="{k}" value="{e(qp[k])}">' for k in ("period", "per") if qp.get(k))
     filters = (f'<div class="filters"><form class="search" method="get" role="search" style="max-width:420px">{hidden}'
                f'<label>{icon("events", 16)}<input type="search" name="q" value="{e(text)}" '
-               f'placeholder="Search process, command, or file" aria-label="Search events"></label></form>{chips}</div>')
+               f'placeholder="Search process, command, or file" aria-label="Search events"></label></form>{chips}'
+               f'<span class="sp"></span><a class="chip" href="{link()}" target="_self">{icon("refresh", 16)}Refresh</a></div>')
     if not len(df):
         return head + filters + '<section class="panel"><div class="empty">No events match this search.</div></section>'
     df = df.astype(object).where(pd.notna(df), None)   # NaN -> None
@@ -612,7 +696,7 @@ def events_body():
         f'<section class="panel" style="overflow:hidden"><div class="scroll"><table class="t" style="min-width:760px">'
         f'<thead><tr><th style="width:150px">Time</th><th style="width:80px">Type</th><th style="width:170px">Process</th>'
         f'<th style="width:150px">Parent</th><th>Command or file</th></tr></thead><tbody>{rows}</tbody></table></div>'
-        f'<div class="empty" style="padding:12px">Showing the newest {len(df):,} matches</div></section>')
+        f'{pager(matches, page, pages, per, offset)}</section>')
 
 
 # ================================================================ หน้า: Rules & ATT&CK
