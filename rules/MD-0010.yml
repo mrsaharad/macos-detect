@@ -1,0 +1,29 @@
+id: MD-0010
+title: Service loaded with launchctl
+title_th: สั่งงานเบื้องหลังผ่าน launchctl
+status: experimental
+description: launchctl loaded or started a background service outside system processes.
+plain_th: มีการใช้ launchctl สั่งโหลด/เริ่มบริการเบื้องหลัง
+author: Saharad
+tags:
+- attack.execution
+- attack.t1569.001
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /launchctl
+    CommandLine|contains:
+    - ' load '
+    - ' bootstrap '
+    - ' submit '
+    - ' start '
+  filter_system:
+    ParentImage|startswith:
+    - /System/
+    - /usr/libexec/
+  condition: selection and not filter_system
+falsepositives:
+- การใช้งานปกติของผู้ดูแลระบบ
+level: medium

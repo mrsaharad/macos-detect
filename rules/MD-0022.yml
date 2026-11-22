@@ -1,0 +1,27 @@
+id: MD-0022
+title: System version discovery
+title_th: สำรวจข้อมูลระบบ (system_profiler / sw_vers)
+status: experimental
+description: The OS version or hardware details were queried. Attackers check this before choosing an exploit.
+plain_th: มีการเก็บข้อมูลรุ่นเครื่องและเวอร์ชัน macOS ซึ่งผู้โจมตีทำก่อนเลือกวิธีโจมตี
+author: Saharad
+tags:
+- attack.discovery
+- attack.t1082
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith:
+    - /system_profiler
+    - /sw_vers
+  filter_system:
+    ParentImage|startswith:
+    - /System/
+    - /usr/libexec/
+    - /Library/Apple/
+  condition: selection and not filter_system
+falsepositives:
+- แอปตรวจสอบระบบ
+level: low

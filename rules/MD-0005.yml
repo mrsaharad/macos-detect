@@ -1,0 +1,23 @@
+id: MD-0005
+title: Keychain key or certificate exported
+title_th: ส่งออก private key/ใบรับรองจาก Keychain
+status: experimental
+description: Private keys or certificates were exported from the Keychain.
+plain_th: มีการส่งออกกุญแจส่วนตัวหรือใบรับรองออกจาก Keychain
+author: Saharad
+tags:
+- attack.credential_access
+- attack.t1552.004
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /security
+    CommandLine|contains:
+    - ' export '
+    - find-certificate -a -p
+  condition: selection
+falsepositives:
+- การใช้งานปกติของผู้ดูแลระบบ
+level: high

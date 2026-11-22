@@ -1,0 +1,21 @@
+id: MD-0011
+title: Launch agent created
+title_th: สร้างไฟล์ .plist ใน LaunchAgents (เปิดเองตอนล็อกอิน)
+status: experimental
+description: A new .plist in LaunchAgents makes a program start every time the user logs in.
+plain_th: มีการวางไฟล์ให้โปรแกรมเปิดเองทุกครั้งที่ผู้ใช้ล็อกอิน — วิธียอดนิยมของมัลแวร์บน Mac
+author: Saharad
+tags:
+- attack.persistence
+- attack.t1543.001
+logsource:
+  product: macos
+  category: file_event
+detection:
+  selection:
+    TargetFilename|contains: /Library/LaunchAgents/
+    TargetFilename|endswith: .plist
+  condition: selection
+falsepositives:
+- การติดตั้งแอปที่มีตัวช่วยเบื้องหลัง
+level: high

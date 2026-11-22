@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!--
+  Console component — กรอบที่แสดงหน้า Dashboard ทั้งหน้า โดยไม่ต้องโหลดหน้าเว็บใหม่
+  Python ส่ง html + css มาให้ (args) แล้วเราแค่เปลี่ยนเนื้อหาข้างใน
+  เมื่อผู้ใช้คลิกลิงก์ "?page=..." หรือกดค้นหา เราไม่ให้เบราว์เซอร์เปลี่ยนหน้า
+  แต่ส่งค่าไปให้ Python ผ่านโปรโตคอลของ Streamlit component (postMessage) แทน
+-->
+<style id="css"></style>
+</head>
+<body style="margin:0">
+<div id="root"></div>
+<script>
+  function send(type, data) {
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data || {}), "*");
+  }
+  var root = document.getElementById("root");
+  var lastCss = null;
+
+  // ความสูงขั้นต่ำ = ความสูงหน้าต่างเบราว์เซอร์ (แถบซ้ายจะได้ยาวถึงล่างสุด)
+  function setViewport() {
+    var h = 800;
+    try { h = window.parent.innerHeight; } catch (e) {}
+    document.documentElement.style.setProperty("--vh", h + "px");
+  }
+  function setHeight() { send("streamlit:setFrameHeight", { height: root.scrollHeight }); }
+
+  // Python ส่งหน้าใหม่มา
+  window.addEventListener("message", function (ev) {
+    var d = ev.data;
+    if (!d || d.type !== "streamlit:render") return;
+    var a = d.args || {};
+    if (a.css !== lastCss) { document.getElementById("css").textContent = a.css; lastCss = a.css; }
+    var active = document.activeElement;
+    var typing = active && active.tagName === "INPUT" && active.name ? active.name : null;
+    root.innerHTML = a.html || "";
+    if (typing) {                      // ถ้ากำลังพิมพ์อยู่ ให้เคอร์เซอร์อยู่ที่ช่องเดิม
+      var again = root.querySelector('input[name="' + typing + '"]');
+      if (again) { again.focus(); var n = again.value.length; again.setSelectionRange(n, n); }
+    }
+    root.classList.remove("busy");
+    setViewport();
+    setHeight();
+  });
+
+  function go(href) {
+    root.classList.add("busy");
+    send("streamlit:setComponentValue", { value: { href: href, ts: Date.now() }, dataType: "json" });
+  }
+
+  // คลิกลิงก์ภายใน Dashboard
+  document.addEventListener("click", function (ev) {
+    var a = ev.target.closest("a[href]");
+    if (!a) return;
+    var href = a.getAttribute("href");
+    if (href.charAt(0) !== "?") return;          // ลิงก์ภายนอกปล่อยตามปกติ
+    ev.preventDefault();
+    var tr = a.closest("tr.rowlink");             // ไฮไลต์แถวทันที ไม่ต้องรอ Python
+    if (tr && tr.parentNode) {
+      tr.parentNode.querySelectorAll("tr.on").forEach(function (x) { x.classList.remove("on"); });
+      tr.classList.add("on");
+    }
+    go(href);
+  });
+
+  // กดค้นหา (Enter ในช่องค้นหา)
+  document.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    go("?" + new URLSearchParams(new FormData(ev.target)).toString());
+  });
+
+  window.addEventListener("resize", setViewport);
+  try { window.parent.addEventListener("resize", function () { setViewport(); setHeight(); }); } catch (e) {}
+  new ResizeObserver(setHeight).observe(root);
+  send("streamlit:componentReady", { apiVersion: 1 });
+</script>
+</body>
+</html>

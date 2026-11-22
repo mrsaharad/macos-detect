@@ -1,0 +1,31 @@
+# แผนการทดสอบด้วย Atomic Red Team (Red Canary) — ใช้ test ทางการเท่านั้น
+# รูปแบบ:  technique  ชุด(dev/eval)
+# Invoke-AtomicTest จะรันเฉพาะ test ที่รองรับ macOS ให้อัตโนมัติ และเรา cleanup ทุกครั้ง
+# ก่อนรันจริง ตรวจรายละเอียดแต่ละ technique ด้วย:  pwsh -c "Invoke-AtomicTest T1082 -ShowDetailsBrief"
+# ⚠️ ไม่ใส่ T1555.001 ในการรันอัตโนมัติ (dump-keychain อาจเด้งขอ/เปิดเผยรหัสผ่าน) — ถ้าจะทดสอบให้ทำทีละ test ด้วยมือ
+# dev = ใช้ปรับกฎได้   eval = ห้ามดูก่อนวัดผล (กัน overfit)
+T1082      dev
+T1087.001  dev
+T1016      dev
+T1518.001  dev
+T1059.002  dev
+T1059.004  dev
+T1543.001  dev
+T1564.001  dev
+T1553.001  dev
+T1070.003  dev
+T1053.003  dev
+T1546.004  dev
+T1140      eval
+T1033      eval
+T1057      eval
+T1083      eval
+T1201      eval
+T1217      eval
+T1543.004  eval
+T1547.015  eval
+T1562.001  eval
+T1562.004  eval
+T1569.001  eval
+T1059.006  eval
+T1105      eval

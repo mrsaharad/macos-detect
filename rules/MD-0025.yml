@@ -1,0 +1,27 @@
+id: MD-0025
+title: Network configuration discovery
+title_th: สำรวจเครือข่าย (arp / networksetup)
+status: experimental
+description: Network interfaces or neighbouring devices on the LAN were listed.
+plain_th: มีการดูข้อมูลเครือข่ายและเครื่องอื่นในวง LAN
+author: Saharad
+tags:
+- attack.discovery
+- attack.t1016
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection_arp:
+    Image|endswith: /arp
+    CommandLine|contains: ' -a'
+  selection_ns:
+    Image|endswith: /networksetup
+    CommandLine|contains:
+    - -listallhardwareports
+    - -getinfo
+    - -listallnetworkservices
+  condition: 1 of selection_*
+falsepositives:
+- ผู้ใช้ตรวจปัญหาเครือข่ายเอง
+level: low

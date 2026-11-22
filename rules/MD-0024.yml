@@ -1,0 +1,21 @@
+id: MD-0024
+title: Installed software listed
+title_th: สำรวจโปรแกรมที่ติดตั้ง
+status: experimental
+description: Installed applications were listed, often to find security tools.
+plain_th: มีการดูรายชื่อแอปที่ติดตั้ง ผู้โจมตีใช้หาว่ามีโปรแกรมป้องกันอะไรบ้าง
+author: Saharad
+tags:
+- attack.discovery
+- attack.t1518
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /system_profiler
+    CommandLine|contains: SPApplicationsDataType
+  condition: selection
+falsepositives:
+- การใช้งานปกติของผู้ดูแลระบบ
+level: low

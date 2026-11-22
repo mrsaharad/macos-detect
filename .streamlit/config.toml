@@ -1,0 +1,13 @@
+[theme]
+base = "dark"
+primaryColor = "#8f80e8"
+backgroundColor = "#181c24"
+secondaryBackgroundColor = "#1f2430"
+textColor = "#e4e7ee"
+
+[server]
+enableStaticServing = true   # ให้ใช้ฟอนต์จาก dashboard/static/fonts ได้
+address = "localhost"        # เปิดได้เฉพาะเครื่องนี้ (ค่าเริ่มต้นของ Streamlit เปิดให้ทุกเครื่องใน Wi-Fi เดียวกันเห็น)
+
+[browser]
+gatherUsageStats = false

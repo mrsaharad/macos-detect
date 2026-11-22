@@ -1,0 +1,21 @@
+id: MD-0006
+title: AppleScript run from command line
+title_th: รัน AppleScript จากบรรทัดคำสั่ง (osascript -e)
+status: experimental
+description: osascript ran an inline script. Attackers use this to control other apps.
+plain_th: มีการสั่งรันสคริปต์ AppleScript ผ่าน Terminal ซึ่งผู้โจมตีนิยมใช้ควบคุมแอปอื่น
+author: Saharad
+tags:
+- attack.execution
+- attack.t1059.002
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /osascript
+    CommandLine|contains: ' -e '
+  condition: selection
+falsepositives:
+- สคริปต์อัตโนมัติของผู้ใช้
+level: medium

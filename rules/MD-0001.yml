@@ -1,0 +1,21 @@
+id: MD-0001
+title: Keychain dumped
+title_th: ดึงข้อมูลทั้ง Keychain ด้วย security dump-keychain
+status: experimental
+description: The security tool dumped the entire Keychain, which holds saved passwords.
+plain_th: มีโปรแกรมสั่งเทข้อมูลทั้งหมดใน Keychain (ที่เก็บรหัสผ่าน) ออกมา
+author: Saharad
+tags:
+- attack.credential_access
+- attack.t1555.001
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /security
+    CommandLine|contains: dump-keychain
+  condition: selection
+falsepositives:
+- การใช้งานปกติของผู้ดูแลระบบ
+level: high

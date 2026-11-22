@@ -1,0 +1,24 @@
+id: MD-0019
+title: Base64 decoded on command line
+title_th: ถอดรหัส base64 จากบรรทัดคำสั่ง
+status: experimental
+description: Encoded data was decoded, often the first step before running a hidden script.
+plain_th: มีการถอดรหัสข้อมูลที่ถูกซ่อนไว้ ซึ่งมักเป็นขั้นแรกก่อนรันสคริปต์อันตราย
+author: Saharad
+tags:
+- attack.stealth
+- attack.t1140
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /base64
+    CommandLine|contains:
+    - ' -d'
+    - ' --decode'
+    - ' -D'
+  condition: selection
+falsepositives:
+- นักพัฒนาถอดรหัสข้อมูลทั่วไป
+level: low

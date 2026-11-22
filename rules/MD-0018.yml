@@ -1,0 +1,22 @@
+id: MD-0018
+title: Shell history deleted
+title_th: ลบประวัติคำสั่ง Terminal
+status: experimental
+description: The Terminal history file was deleted, removing the record of past commands.
+plain_th: มีการลบไฟล์ประวัติคำสั่ง เพื่อลบร่องรอยสิ่งที่ทำไป
+author: Saharad
+tags:
+- attack.stealth
+- attack.t1070.003
+logsource:
+  product: macos
+  category: file_delete
+detection:
+  selection:
+    TargetFilename|endswith:
+    - /.zsh_history
+    - /.bash_history
+  condition: selection
+falsepositives:
+- การใช้งานปกติของผู้ดูแลระบบ
+level: medium

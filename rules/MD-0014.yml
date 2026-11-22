@@ -1,0 +1,28 @@
+id: MD-0014
+title: Shell profile modified
+title_th: แก้ไฟล์ตั้งค่า shell (.zshrc / .bash_profile)
+status: experimental
+description: A shell startup file such as .zshrc changed. Commands placed there run in every new Terminal.
+plain_th: มีการแก้ไฟล์ที่รันทุกครั้งที่เปิด Terminal ผู้โจมตีใช้ฝังคำสั่งให้รันเอง
+author: Saharad
+tags:
+- attack.persistence
+- attack.t1546.004
+logsource:
+  product: macos
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith:
+    - /.zshrc
+    - /.zshenv
+    - /.zprofile
+    - /.zlogin
+    - /.bash_profile
+    - /.bashrc
+    - /.profile
+  condition: selection
+falsepositives:
+- ผู้ใช้แก้ไฟล์ตั้งค่าเอง
+- ตัวติดตั้งเช่น Homebrew/conda
+level: medium

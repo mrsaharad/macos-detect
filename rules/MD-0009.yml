@@ -1,0 +1,24 @@
+id: MD-0009
+title: Program run from temporary folder
+title_th: รันโปรแกรมจากโฟลเดอร์ชั่วคราวหรือโฟลเดอร์สาธารณะ
+status: experimental
+description: A program was launched from /tmp or a shared folder, where malware often drops itself.
+plain_th: มีโปรแกรมถูกเปิดจากโฟลเดอร์ชั่วคราว (/tmp) ซึ่งเป็นที่ที่มัลแวร์ชอบวางตัวเอง
+author: Saharad
+tags:
+- attack.execution
+- attack.t1204.002
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|startswith:
+    - /tmp/
+    - /private/tmp/
+    - /Users/Shared/
+    - /private/var/tmp/
+  condition: selection
+falsepositives:
+- ตัวติดตั้งโปรแกรมบางตัว
+level: medium

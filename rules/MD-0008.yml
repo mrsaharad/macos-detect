@@ -1,0 +1,23 @@
+id: MD-0008
+title: Encoded Python one-liner
+title_th: Python รันโค้ดที่เข้ารหัส base64 ในบรรทัดเดียว
+status: experimental
+description: Python ran base64-encoded code, a common way to hide a malicious payload.
+plain_th: มีการรันโค้ด Python ที่ถูกซ่อนด้วย base64 ซึ่งมักใช้ซ่อนมัลแวร์
+author: Saharad
+tags:
+- attack.execution
+- attack.t1059.006
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|contains: /python
+    CommandLine|contains|all:
+    - ' -c '
+    - base64
+  condition: selection
+falsepositives:
+- การใช้งานปกติของผู้ดูแลระบบ
+level: high

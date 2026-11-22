@@ -1,0 +1,27 @@
+id: MD-0002
+title: Keychain password lookup
+title_th: ค้นรหัสผ่านใน Keychain ด้วย security find-*-password
+status: experimental
+description: The security tool read a saved password from the Keychain, launched outside system processes.
+plain_th: มีการค้นหารหัสผ่านที่บันทึกไว้ใน Keychain ผ่านคำสั่ง security
+author: Saharad
+tags:
+- attack.credential_access
+- attack.t1555.001
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /security
+    CommandLine|contains:
+    - find-generic-password
+    - find-internet-password
+  filter_system:
+    ParentImage|startswith:
+    - /System/
+    - /usr/libexec/
+  condition: selection and not filter_system
+falsepositives:
+- การใช้งานปกติของผู้ดูแลระบบ
+level: medium

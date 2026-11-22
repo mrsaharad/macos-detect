@@ -1,0 +1,27 @@
+id: MD-0003
+title: Keychain database copied
+title_th: อ่านหรือคัดลอกไฟล์ฐานข้อมูล Keychain โดยตรง
+status: experimental
+description: The Keychain database file (login.keychain-db) was read or copied directly. Apps do not normally do this.
+plain_th: มีการอ่าน/คัดลอกไฟล์ Keychain (login.keychain-db) ซึ่งปกติแอปไม่ทำแบบนี้
+author: Saharad
+tags:
+- attack.credential_access
+- attack.t1555.001
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith:
+    - /cat
+    - /cp
+    - /ditto
+    - /scp
+    - /zip
+    - /tar
+    CommandLine|contains: .keychain-db
+  condition: selection
+falsepositives:
+- การใช้งานปกติของผู้ดูแลระบบ
+level: high

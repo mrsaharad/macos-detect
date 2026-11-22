@@ -1,0 +1,22 @@
+id: MD-0013
+title: Cron job modified
+title_th: แก้ไขตารางงานตั้งเวลา (crontab)
+status: experimental
+description: A scheduled cron job was added or replaced.
+plain_th: มีการตั้งงานให้รันซ้ำตามเวลาด้วย cron
+author: Saharad
+tags:
+- attack.persistence
+- attack.t1053.003
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /crontab
+  filter_list:
+    CommandLine|endswith: ' -l'
+  condition: selection and not filter_list
+falsepositives:
+- การใช้งานปกติของผู้ดูแลระบบ
+level: medium

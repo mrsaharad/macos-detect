@@ -1,0 +1,34 @@
+id: MD-0007
+title: Internet script piped to shell
+title_th: ดาวน์โหลดสคริปต์แล้วส่งให้ shell รันทันที (curl | sh)
+status: experimental
+description: A script was downloaded and executed immediately without being saved or reviewed.
+plain_th: มีการโหลดสคริปต์จากอินเทอร์เน็ตแล้วรันทันทีโดยไม่ตรวจก่อน
+author: Saharad
+tags:
+- attack.execution
+- attack.t1059.004
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith:
+    - /sh
+    - /bash
+    - /zsh
+    CommandLine|contains:
+    - 'curl '
+    - 'wget '
+  pipe:
+    CommandLine|contains:
+    - '| sh'
+    - '|sh'
+    - '| bash'
+    - '|bash'
+    - '| zsh'
+    - '|zsh'
+  condition: selection and pipe
+falsepositives:
+- สคริปต์ติดตั้งโปรแกรมที่เชื่อถือได้ เช่น Homebrew
+level: high

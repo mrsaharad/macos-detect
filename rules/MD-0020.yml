@@ -1,0 +1,23 @@
+id: MD-0020
+title: Gatekeeper disabled
+title_th: ปิด Gatekeeper (spctl --master-disable)
+status: experimental
+description: App verification was turned off, so unsigned apps can open without a warning.
+plain_th: มีการปิดระบบตรวจแอปของ macOS ทำให้แอปไม่ผ่านการตรวจเปิดได้
+author: Saharad
+tags:
+- attack.defense_impairment
+- attack.t1562.001
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /spctl
+    CommandLine|contains:
+    - --master-disable
+    - --global-disable
+  condition: selection
+falsepositives:
+- การใช้งานปกติของผู้ดูแลระบบ
+level: critical

@@ -1,0 +1,21 @@
+id: MD-0012
+title: Launch daemon created
+title_th: สร้างไฟล์ .plist ใน LaunchDaemons (เปิดเองตอนบูต สิทธิ์ root)
+status: experimental
+description: A new .plist in /Library/LaunchDaemons makes a program start at boot with root privileges.
+plain_th: มีการวางไฟล์ให้โปรแกรมเปิดเองตอนเปิดเครื่องด้วยสิทธิ์สูงสุด
+author: Saharad
+tags:
+- attack.persistence
+- attack.t1543.004
+logsource:
+  product: macos
+  category: file_event
+detection:
+  selection:
+    TargetFilename|startswith: /Library/LaunchDaemons/
+    TargetFilename|endswith: .plist
+  condition: selection
+falsepositives:
+- การใช้งานปกติของผู้ดูแลระบบ
+level: high
