@@ -1,9 +1,9 @@
 id: MD-0022
 title: System version discovery
-title_th: สำรวจข้อมูลระบบ (system_profiler / sw_vers)
+title_th: สำรวจข้อมูลระบบ (system_profiler / sw_vers / csrutil / sysctl)
 status: experimental
-description: The OS version or hardware details were queried. Attackers check this before choosing an exploit.
-plain_th: มีการเก็บข้อมูลรุ่นเครื่องและเวอร์ชัน macOS ซึ่งผู้โจมตีทำก่อนเลือกวิธีโจมตี
+description: The OS version, hardware model or System Integrity Protection status was queried. Attackers check this before choosing an exploit.
+plain_th: มีการเก็บข้อมูลรุ่นเครื่อง เวอร์ชัน macOS หรือสถานะ SIP ซึ่งผู้โจมตีทำก่อนเลือกวิธีโจมตี
 author: Saharad
 tags:
 - attack.discovery
@@ -12,16 +12,29 @@ logsource:
   product: macos
   category: process_creation
 detection:
-  selection:
+  selection_tools:
     Image|endswith:
     - /system_profiler
     - /sw_vers
+  # ปรับจากผล Atomic T1082 (ชุด dev): ระบบเห็น 2 คำสั่งนี้แต่ไม่มีกฎจับ
+  selection_sip:
+    Image|endswith: /csrutil
+    CommandLine|contains: status
+  # เฉพาะ hw.model — Homebrew เรียก sysctl hw.cputype / hw.cpufamily ตามปกติ จึงไม่จับทั้ง hw.*
+  selection_model:
+    Image|endswith: /sysctl
+    CommandLine|contains: hw.model
   filter_system:
     ParentImage|startswith:
     - /System/
     - /usr/libexec/
     - /Library/Apple/
-  condition: selection and not filter_system
+  # system_profiler แตกโปรเซสลูกเป็นตัวเอง 1 ตัวต่อประเภทข้อมูล (เจอ 51 ตัวจากการรันครั้งเดียว)
+  # จึงนับเฉพาะตัวแม่ ไม่ให้เกิด alert ซ้ำจากการกระทำครั้งเดียว
+  filter_child:
+    ParentImage|endswith: /system_profiler
+  condition: 1 of selection_* and not filter_system and not filter_child
 falsepositives:
 - แอปตรวจสอบระบบ
+- แอป Claude desktop เรียก sw_vers (พบจริงระหว่างทดสอบ)
 level: low

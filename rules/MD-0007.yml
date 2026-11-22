@@ -28,7 +28,24 @@ detection:
     - '|bash'
     - '| zsh'
     - '|zsh'
-  condition: selection and pipe
+  # ปรับจากผล Atomic T1059.004 (dev): รันสคริปต์จาก /tmp และ shell ที่ถูกเปิดจาก awk
+  tmp_script:
+    Image|endswith:
+    - /sh
+    - /bash
+    - /zsh
+    CommandLine|re: '^(\S*/)?(ba|z)?sh (/private)?/tmp/\S+'
+  awk_shell:
+    ParentImage|endswith: /awk
+    Image|endswith:
+    - /sh
+    - /bash
+    - /zsh
+  # ตัวติดตั้งแพ็กเกจ (.pkg) ของ macOS รันสคริปต์ติดตั้งจาก /tmp/PKInstallSandbox.* ตามปกติ (พบจริงตอนติดตั้ง PowerShell)
+  filter_installer:
+  - ParentImage|endswith: /package_script_service
+  - CommandLine|contains: /PKInstallSandbox.
+  condition: ((selection and pipe) or tmp_script or awk_shell) and not filter_installer
 falsepositives:
 - สคริปต์ติดตั้งโปรแกรมที่เชื่อถือได้ เช่น Homebrew
 level: high

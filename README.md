@@ -38,10 +38,13 @@ DETECT_DB=data/test.db streamlit run dashboard/app.py
 
 ## ทดลองด้วย Atomic Red Team (ครั้งแรกต้องติดตั้ง)
 ```bash
-brew install --cask powershell
+brew install powershell
 pwsh -c 'IEX (IWR "https://raw.githubusercontent.com/redcanaryco/invoke-atomicredteam/master/install-atomicredteam.ps1" -UseBasicParsing); Install-AtomicRedTeam -getAtomics'
 ```
-จากนั้น (เปิด collector ไว้อีกหน้าต่าง): `./attacksim/run_atomic.sh` แล้ว `python scripts/report.py`
+จากนั้น (เปิด collector ไว้อีกหน้าต่าง รันใน Terminal เพราะต้องใส่รหัสผ่าน sudo):
+`./attacksim/run_atomic.sh dev` → ปรับกฎ → `./attacksim/run_atomic.sh eval` + `./attacksim/manual_tests.sh` → `python scripts/report.py`
+test ที่เลือกรันและเหตุผลอยู่ใน `attacksim/test_selection.md`
+ผลของแต่ละ test อยู่ที่ `data/atomic_logs/<technique>.log` (ใช้ตรวจว่า test รันสำเร็จจริง)
 
 ## ข้อควรระวัง
 - `data/` ไม่อยู่ใน git (มีข้อมูลจริงของเครื่อง) — ระบบไม่เก็บฟิลด์ `env` ของ eslogger

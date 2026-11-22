@@ -46,10 +46,14 @@
 
 ## ยังไม่ได้แก้ (แนะนำ)
 
-### 5. run_atomic.sh ไม่เก็บผลลัพธ์ของแต่ละ test
-ผลจาก `Invoke-AtomicTest` แสดงแค่บนจอ ถ้า test ล้มเหลวหรือถูกข้าม ก็ยังบันทึกช่วงเวลาลง `runs.csv` อยู่ดี
-สถานะ `Not-Visible?` ใน report.py จึงแยกไม่ออกว่า "ระบบมองไม่เห็น" หรือ "test ไม่ได้รันจริง"
-แนะนำให้เก็บ log ของแต่ละ technique ลง `data/atomic_logs/<technique>.txt` เพื่อใช้เป็นหลักฐานในบทที่ 4
+### 5. run_atomic.sh ไม่เก็บผลลัพธ์ของแต่ละ test — แก้แล้ว (อัปเดตหลังติดตั้ง Atomic Red Team)
+- **ปัญหาเดิม:** ผลจาก `Invoke-AtomicTest` แสดงแค่บนจอ ถ้า test ล้มเหลวก็ยังบันทึกช่วงเวลาลง `runs.csv`
+  สถานะ `Not-Visible?` จึงแยกไม่ออกว่า "ระบบมองไม่เห็น" หรือ "test ไม่ได้รันจริง"
+- **ปัญหาที่เจอเพิ่มหลังติดตั้ง:** สคริปต์รัน `pwsh -NoProfile` ซึ่งไม่โหลด module ให้ จึงหาคำสั่ง
+  `Invoke-AtomicTest` ไม่เจอ ถ้ารันแผนตอนนั้น ทุก test จะล้มเหลวโดยไม่มีอะไรบอก แต่ยังจดเวลาลง `runs.csv`
+- **แก้:** `attacksim/run_atomic.sh` โหลด module จาก `~/AtomicRedTeam/invoke-atomicredteam/` เอง
+  (หยุดพร้อมข้อความถ้าไม่พบ) และเก็บผล prereqs / run / cleanup ไว้ที่ `data/atomic_logs/<technique>.log`
+- **ตรวจแล้ว:** syntax ผ่าน และฟังก์ชันที่ใช้โหลด module แสดงรายการ test ของ T1082 ได้ (ตรวจแบบไม่รัน test จริง)
 
 ### 6. Dashboard ดึงฟอนต์จาก Google Fonts โดยไม่จำเป็น
 `dashboard/app.py` บรรทัด 230 มี `@import` ไปที่ fonts.googleapis.com ทั้งที่มีไฟล์ Sarabun อยู่ใน `dashboard/static/fonts/` แล้ว

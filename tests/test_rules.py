@@ -62,6 +62,7 @@ POSITIVE = {
     "MD-0023": ev_exec("/usr/bin/dscl", ["dscl", ".", "list", "/Users"]),
     "MD-0024": ev_exec("/usr/sbin/system_profiler", ["system_profiler", "SPApplicationsDataType"]),
     "MD-0025": ev_exec("/usr/sbin/arp", ["arp", "-a"]),
+    "MD-0026": ev_exec("/bin/sh", ["sh", "-c", "unset HISTFILE; export HISTFILESIZE=0; history -c"]),
 }
 
 # event ปกติที่ "ไม่ควร" ถูกจับ (เช่น noise จาก Cloudflare WARP ที่เจอใน log จริง)
@@ -71,6 +72,7 @@ BENIGN = [
     ev_exec("/usr/bin/security", ["security", "list-keychains"]),
     ev_exec("/usr/bin/crontab", ["crontab", "-l"]),
     ev_exec("/usr/bin/xattr", ["xattr", "-l", "/tmp/app"]),
+    ev_exec("/usr/sbin/sysctl", ["/usr/sbin/sysctl", "-n", "hw.cputype"]),   # Homebrew เรียกตามปกติ
     ev_create("/Users/u/Documents/report.docx"),
     ev_unlink("/Users/u/Downloads/old.zip"),
     {"time": T, "process": SHELL, "event": {"fork": {"child": {"audit_token": {"pid": 601}, "executable": {"path": "/bin/zsh"}}}}},
@@ -88,6 +90,43 @@ def main():
         ok = rid in hit
         fails += not ok
         print(f"{'✅' if ok else '❌'} {rid} จับได้: {hit}")
+
+    # MD-0022 หลังปรับจากผล Atomic T1082: คำสั่งที่เพิ่ม + ไม่จับโปรเซสลูกของ system_profiler
+    for raw, want in [(ev_exec("/usr/bin/csrutil", ["csrutil", "status"]), True),
+                      (ev_exec("/usr/sbin/sysctl", ["sysctl", "-n", "hw.model"]), True),
+                      (ev_exec("/usr/sbin/system_profiler", ["system_profiler", "-nospawn", "-xml", "SPAudioDataType"]), False)]:
+        rec = Normalizer().normalize(raw)
+        if not want:
+            rec["ParentImage"] = "/usr/sbin/system_profiler"      # โปรเซสลูกที่ system_profiler แตกออกมา
+        ok = by_id["MD-0022"].matches(rec) == want
+        fails += not ok
+        print(f"{'✅' if ok else '❌'} MD-0022 {'จับ' if want else 'ไม่จับ'}: {rec['CommandLine']}"
+              f"{' (ลูกของ system_profiler)' if not want else ''}")
+
+    # เงื่อนไขที่เพิ่มจากผล Atomic ชุด dev (rule, event, parent, ควรจับไหม)
+    DEV_CASES = [
+        ("MD-0023", ev_exec("/bin/cat", ["cat", "/etc/sudoers"]), None, True),
+        ("MD-0023", ev_exec("/usr/bin/grep", ["grep", "x:0:", "/etc/passwd"]), None, True),
+        ("MD-0025", ev_exec("/usr/libexec/ApplicationFirewall/socketfilterfw",
+                            ["socketfilterfw", "--getglobalstate"]), None, True),
+        ("MD-0025", ev_exec("/usr/bin/defaults", ["defaults", "read", "/Library/Preferences/com.apple.alf"]), None, True),
+        ("MD-0024", ev_exec("/usr/bin/egrep", ["egrep", "Little\\ Snitch|falcond|santad"]), None, True),
+        ("MD-0007", ev_exec("/bin/sh", ["sh", "/tmp/art.sh"]), None, True),
+        ("MD-0007", ev_exec("/bin/sh", ["sh", "-c", "/bin/sh &"]), "/usr/bin/awk", True),
+        ("MD-0007", ev_exec("/bin/bash", ["/bin/bash", "/tmp/PKInstallSandbox.75tPLm/Scripts/x/postinstall"]),
+         "/System/Library/PrivateFrameworks/PackageKit.framework/Resources/package_script_service", False),
+        ("MD-0016", ev_exec("/usr/bin/defaults", ["defaults", "write", "com.apple.finder", "AppleShowAllFiles", "YES"]), None, True),
+        ("MD-0016", ev_exec("/usr/bin/defaults", ["defaults", "write", "com.apple.finder", "AppleShowAllFiles", "NO"]), None, False),
+        ("MD-0026", ev_exec("/bin/bash", ["bash", "-c", "set +o history; history -c"]), None, True),
+        ("MD-0026", ev_exec("/bin/zsh", ["zsh", "-c", "echo hello"]), None, False),
+    ]
+    for rid, raw, parent, want in DEV_CASES:
+        rec = Normalizer().normalize(raw)
+        if parent:
+            rec["ParentImage"] = parent
+        ok = by_id[rid].matches(rec) == want
+        fails += not ok
+        print(f"{'✅' if ok else '❌'} {rid} {'จับ' if want else 'ไม่จับ'}: {rec['CommandLine'][:60]}")
 
     missing = set(by_id) - set(POSITIVE)
     if missing:

@@ -1,0 +1,30 @@
+id: MD-0026
+title: Shell history logging disabled
+title_th: ปิดการบันทึกประวัติคำสั่งของ shell
+status: experimental
+description: A shell was told to stop recording or to clear its command history, which hides what an attacker typed.
+plain_th: มีการสั่งให้ shell หยุดบันทึกหรือล้างประวัติคำสั่ง ซึ่งผู้โจมตีใช้ซ่อนร่องรอยคำสั่งที่พิมพ์
+author: Saharad
+tags:
+- attack.stealth
+- attack.t1070.003
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  # เพิ่มจากผล Atomic T1070.003-6,7 (dev): MD-0018 ดูเฉพาะการลบไฟล์ประวัติ จับคำสั่งแบบนี้ไม่ได้
+  selection:
+    Image|endswith:
+    - /sh
+    - /bash
+    - /zsh
+    CommandLine|contains:
+    - unset HISTFILE
+    - HISTFILESIZE=0
+    - HISTSIZE=0
+    - set +o history
+    - history -c
+  condition: selection
+falsepositives:
+- สคริปต์ของผู้ดูแลระบบที่ตั้งใจปิดประวัติ
+level: medium

@@ -15,7 +15,12 @@ detection:
   selection:
     Image|endswith: /chflags
     CommandLine|contains: hidden
-  condition: selection
+  # ปรับจากผล Atomic T1564.001 (dev): ตั้ง Finder ให้แสดงไฟล์ซ่อน
+  selection_finder:
+    Image|endswith: /defaults
+    # จับเฉพาะการ "เปิด" แสดงไฟล์ซ่อน (YES/TRUE/1) ไม่จับการปิดคืน
+    CommandLine|re: 'write\s+com\.apple\.finder\s+AppleShowAllFiles\s+(-bool\s+)?(YES|TRUE|1)\b'
+  condition: 1 of selection*
 falsepositives:
 - การใช้งานปกติของผู้ดูแลระบบ
 level: medium

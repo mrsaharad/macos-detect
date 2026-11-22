@@ -15,7 +15,23 @@ detection:
   selection:
     Image|endswith: /system_profiler
     CommandLine|contains: SPApplicationsDataType
-  condition: selection
+  # ปรับจากผล Atomic T1518.001 (dev): ค้นหาโปรเซสของซอฟต์แวร์ความปลอดภัย
+  selection_secsw:
+    Image|endswith:
+    - /grep
+    - /egrep
+    - /pgrep
+    CommandLine|contains:
+    - Little Snitch
+    - LittleSnitch
+    - falcond
+    - santad
+    - CbOsxSensorService
+    - CbDefense
+    - osqueryd
+    - BlockBlock
+    - LuLu
+  condition: 1 of selection*
 falsepositives:
 - การใช้งานปกติของผู้ดูแลระบบ
 level: low

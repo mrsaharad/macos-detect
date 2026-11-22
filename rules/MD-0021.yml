@@ -7,7 +7,7 @@ plain_th: มีการปิดไฟร์วอลล์ของเคร�
 author: Saharad
 tags:
 - attack.defense_impairment
-- attack.t1562.004
+- attack.t1686
 logsource:
   product: macos
   category: process_creation

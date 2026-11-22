@@ -21,6 +21,18 @@ detection:
     - -listallhardwareports
     - -getinfo
     - -listallnetworkservices
+  # ปรับจากผล Atomic T1016 (dev): สำรวจการตั้งค่า firewall
+  selection_fw:
+    Image|endswith: /socketfilterfw
+    CommandLine|contains:
+    - --getglobalstate
+    - --listapps
+    - --getstealthmode
+  selection_alf:
+    Image|endswith: /defaults
+    CommandLine|contains|all:
+    - read
+    - com.apple.alf
   condition: 1 of selection_*
 falsepositives:
 - ผู้ใช้ตรวจปัญหาเครือข่ายเอง

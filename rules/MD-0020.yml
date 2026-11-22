@@ -7,7 +7,7 @@ plain_th: มีการปิดระบบตรวจแอปของ mac
 author: Saharad
 tags:
 - attack.defense_impairment
-- attack.t1562.001
+- attack.t1685
 logsource:
   product: macos
   category: process_creation

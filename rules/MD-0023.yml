@@ -20,7 +20,21 @@ detection:
     - list /Users
     - -q user
     - read /Groups/admin
-  condition: selection
+  # ปรับจากผล Atomic T1087.001 (dev): อ่านรายชื่อบัญชี / สิทธิ์ sudo จากไฟล์ระบบโดยตรง
+  selection_files:
+    Image|endswith:
+    - /cat
+    - /grep
+    - /egrep
+    - /head
+    - /tail
+    - /less
+    - /more
+    - /awk
+    CommandLine|contains:
+    - /etc/sudoers
+    - /etc/passwd
+  condition: 1 of selection*
 falsepositives:
 - การใช้งานปกติของผู้ดูแลระบบ
 level: low
