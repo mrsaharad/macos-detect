@@ -1,0 +1,41 @@
+digraph G {
+  graph [rankdir=TB, fontname="Loma", fontsize=14, nodesep=0.5, ranksep=0.45, pad=0.25, bgcolor="white", newrank=true];
+  node  [fontname="Loma", fontsize=13, shape=box, style="rounded", penwidth=1.3, margin="0.15,0.06"];
+  edge  [fontname="Loma", fontsize=11, penwidth=1.1, arrowsize=0.8];
+
+  subgraph cluster_mac {
+    label="MacBook Air M2 (macOS 27)"; labeljust=l; style="rounded"; penwidth=1.5; fontsize=15;
+
+    user  [label="ผู้ใช้งานและโปรแกรมทั่วไป"];
+    art   [label="ส่วนจำลองการโจมตี\n(Atomic Red Team)", style="rounded,dashed"];
+    esf   [label="Kernel / Endpoint Security Framework", style="filled", fillcolor="#eeeeee"];
+    eslog [label="eslogger (sudo)"];
+
+    subgraph cluster_det {
+      label="ระบบตรวจจับ (Python)"; labeljust=l; style="dashed,rounded"; penwidth=1.3;
+      rules [label="กฎตรวจจับ\n(YAML แบบ Sigma)", shape=note];
+      col   [label="Collector"];
+      norm  [label="Normalizer"];
+      eng   [label="Rule Engine"];
+      db    [label="Alert Store (SQLite)\nตาราง events, alerts", shape=cylinder];
+      dash  [label="Dashboard (Streamlit)"];
+    }
+  }
+  viewer [label="ผู้ใช้งาน / ผู้ดูแลระบบ", shape=plaintext];
+
+  user -> esf [label=" พฤติกรรมปกติ"];
+  art  -> esf [label=" พฤติกรรมจำลอง", style=dashed];
+  esf  -> eslog [label=" เหตุการณ์ exec, fork, create, rename, unlink"];
+  eslog -> col [label=" JSON ผ่าน pipe"];
+  col -> norm;
+  norm -> eng [label=" schema กลาง"];
+  rules -> eng;
+  norm -> db [label=" events"];
+  eng -> db [label=" alerts"];
+  db -> dash;
+  dash -> viewer;
+
+  {rank=same; user; art}
+  {rank=same; col; norm; eng}
+  {rank=same; eslog; rules}
+}

@@ -1,15 +1,16 @@
 #!/bin/zsh
 # บันทึกช่วง "ใช้เครื่องตามปกติ" (ไม่มีการโจมตี) ไว้วัด False Positive ต่อชั่วโมง
 # และวัด CPU/RAM ของ collector + eslogger ไปพร้อมกัน (scripts/measure_overhead.py)
-# วิธีใช้: ./attacksim/baseline.sh 60   (ใช้เครื่องปกติ 60 นาที ระหว่างนั้นต้องเปิด collector ไว้)
+# วิธีใช้: ./attacksim/baseline.sh 480  (ใช้เครื่องปกติ 8 ชม.; รอบนำร่องเดิมใช้ 60 นาที ระหว่างนั้นต้องเปิด collector ไว้)
 cd "$(dirname "$0")/.."
-mins=${1:-60}
+mins=${1:-480}
 RUNS=data/runs.csv; mkdir -p data
 [[ -f $RUNS ]] || echo "technique,set,start_utc,end_utc" > $RUNS
 PY=python3; [[ -x .venv/bin/python ]] && PY=.venv/bin/python
 
 $PY scripts/measure_overhead.py --minutes $mins --interval 5 &
 MEASURE=$!
+caffeinate -i -s -w $MEASURE &     # กันเครื่องหลับจนกว่าการวัดจะจบ (ต้องเสียบสายชาร์จสำหรับ -s)
 sleep 1
 kill -0 $MEASURE 2>/dev/null || { echo "เริ่มตัววัดไม่ได้ — เปิด collector (start_collector.command) ก่อน"; exit 1; }
 

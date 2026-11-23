@@ -107,6 +107,8 @@ def main():
     ap = argparse.ArgumentParser(description="วัด CPU/RAM ของ collector + eslogger")
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--interval", type=float, default=5, help="วัดทุกกี่วินาที")
+    ap.add_argument("--tag", default="overhead",
+                    help="ชื่อไฟล์ผล เช่น stability → stability.csv / stability_summary.json")
     args = ap.parse_args()
 
     targets = find_targets(ps_table())
@@ -116,14 +118,15 @@ def main():
           f"ทุก {args.interval:g} วินาที นาน {args.minutes:g} นาที (Ctrl+C เพื่อหยุดก่อน)", file=sys.stderr)
 
     os.makedirs(OUT, exist_ok=True)
-    rows, prev = [], None
+    rows, prev, stopped = [], None, None
     start_wall, start_events, start_db = time.monotonic(), event_count(), db_bytes()
     start_utc = datetime.now(timezone.utc)
     try:
         while time.monotonic() - start_wall < args.minutes * 60:
             table, now = ps_table(), time.monotonic()
             if any(p not in table for p in targets.values()):
-                print("[overhead] collector หรือ eslogger หยุดทำงาน — จบการวัด", file=sys.stderr)
+                stopped = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                print(f"[overhead] collector หรือ eslogger หยุดทำงานเมื่อ {stopped} — จบการวัด", file=sys.stderr)
                 break
             cur = {k: table[p] for k, p in targets.items()}
             if prev:
@@ -144,7 +147,7 @@ def main():
 
     if not rows:
         sys.exit("ยังไม่มีข้อมูล (ต้องวัดอย่างน้อย 2 ครั้ง)")
-    with open(os.path.join(OUT, "overhead.csv"), "w", newline="", encoding="utf-8") as f:
+    with open(os.path.join(OUT, f"{args.tag}.csv"), "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
@@ -159,10 +162,13 @@ def main():
         "events": (end_events - start_events) if None not in (start_events, end_events) else None,
         "db_growth_mb": round((db_bytes() - start_db) / 1048576, 2),
         "note": "CPU% คิดต่อ 1 คอร์ (100% = เต็ม 1 คอร์)",
+        "planned_minutes": args.minutes,
+        "sensor_stopped_at": stopped,      # None = collector/eslogger ทำงานตลอดช่วงที่วัด
+        "pids": targets,
     }
     if summary["events"] is not None and minutes:
         summary["events_per_sec"] = round(summary["events"] / (minutes * 60), 1)
-    with open(os.path.join(OUT, "overhead_summary.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(OUT, f"{args.tag}_summary.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
     c, r = summary["cpu_pct"]["total"], summary["rss_mb"]["total"]
@@ -170,7 +176,9 @@ def main():
     print(f"  CPU รวม (collector+eslogger): เฉลี่ย {c['mean']}%  P95 {c['p95']}%  สูงสุด {c['max']}%  (ต่อ 1 คอร์)")
     print(f"  RAM รวม: เฉลี่ย {r['mean']} MB  สูงสุด {r['max']} MB")
     print(f"  event {summary['events']:,} รายการ ({summary.get('events_per_sec')}/วินาที)  ฐานข้อมูลโต {summary['db_growth_mb']} MB")
-    print(f"บันทึกไว้ที่ {OUT}/overhead.csv และ overhead_summary.json")
+    if stopped:
+        print(f"  ⚠️ collector/eslogger หยุดทำงานเมื่อ {stopped} (ก่อนครบเวลาที่กำหนด)")
+    print(f"บันทึกไว้ที่ {OUT}/{args.tag}.csv และ {args.tag}_summary.json")
 
 
 if __name__ == "__main__":

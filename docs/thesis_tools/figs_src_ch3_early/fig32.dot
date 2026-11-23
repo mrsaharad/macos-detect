@@ -1,0 +1,43 @@
+digraph F {
+  graph [rankdir=TB, fontname="Loma", nodesep=0.35, ranksep=0.28, pad=0.2, bgcolor="white", splines=ortho];
+  node  [fontname="Loma", fontsize=12, shape=box, penwidth=1.2, margin="0.12,0.05", height=0.4];
+  edge  [fontname="Loma", fontsize=11, penwidth=1.0, arrowsize=0.7];
+
+  start [label="เริ่มต้น", shape=ellipse];
+  p1 [label="รัน eslogger ด้วย sudo\nส่งผลลัพธ์ผ่าน pipe เข้าสู่ Collector"];
+  p2 [label="Rule Engine โหลดกฎทั้งหมดจากไฟล์ YAML"];
+  io1 [label="อ่านข้อมูล 1 บรรทัด", shape=parallelogram];
+  d1 [label="สิ้นสุดข้อมูล\nหรือสั่งหยุด?", shape=diamond, margin="0.02,0.02"];
+  d2 [label="เป็นข้อมูล\nJSON?", shape=diamond, margin="0.02,0.02"];
+  p3 [label="แปลง JSON เป็นข้อมูลของ Python\n(Collector)"];
+  p4 [label="แปลงเป็น schema กลาง และเติม ParentImage\n(Normalizer)"];
+  d3 [label="exec หรือ\nfork?", shape=diamond, margin="0.02,0.02"];
+  p5 [label="ปรับปรุงตาราง\npid → โปรแกรม"];
+  db1 [label="บันทึกลงตาราง events", shape=cylinder];
+  p6 [label="เปรียบเทียบกับกฎข้อถัดไป\n(Rule Engine)"];
+  d4 [label="ตรงกับ\nเงื่อนไขกฎ?", shape=diamond, margin="0.02,0.02"];
+  p7 [label="สร้างการแจ้งเตือน\nพร้อมเวลา ts_alert"];
+  db2 [label="บันทึกลงตาราง alerts", shape=cylinder];
+  d5 [label="ครบ\nทุกกฎ?", shape=diamond, margin="0.02,0.02"];
+  stop [label="สิ้นสุด", shape=ellipse];
+
+  start -> p1 -> p2 -> io1 -> d1;
+  d1 -> stop [xlabel="ใช่ "];
+  d1 -> d2 [label=" ไม่ใช่"];
+  d2 -> io1 [xlabel="ไม่ใช่ "];
+  d2 -> p3 [label=" ใช่"];
+  p3 -> p4 -> d3;
+  d3 -> p5 [label="ใช่"];
+  d3 -> db1 [label=" ไม่ใช่"];
+  p5 -> db1;
+  db1 -> p6 -> d4;
+  d4 -> p7 [label="ใช่"];
+  d4 -> d5 [label=" ไม่ใช่"];
+  p7 -> db2 -> d5;
+  d5 -> p6 [xlabel="ไม่ใช่ "];
+  d5 -> io1 [label=" ใช่"];
+
+  {rank=same; d3; p5}
+  {rank=same; d4; p7}
+  {rank=same; d1; stop}
+}

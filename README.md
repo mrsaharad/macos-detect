@@ -18,7 +18,9 @@ eslogger ──► Collector ──► Normalizer ──► SQLite (events) ─�
 | `rules/MD-00xx.yml` | กฎ 25 ข้อ แต่ละข้อมี `plain_th` = คำอธิบายภาษาคน |
 | `dashboard/app.py` | คอนโซล 4 หน้า: ภาพรวม, ภัยคุกคาม (process tree + ตัดสิน TP/FP), ค้นหา Event, กฎ & ATT&CK coverage |
 | `attacksim/run_atomic.sh` | รัน Atomic Red Team ตามแผน + จดช่วงเวลาลง `data/runs.csv` |
-| `attacksim/baseline.sh` | จดช่วงใช้งานปกติ ไว้วัด False Positive |
+| `attacksim/baseline.sh` | จดช่วงใช้งานปกติ (ค่าเริ่มต้น 8 ชม.) ไว้วัด False Positive + CPU/RAM |
+| `attacksim/stability.sh` | ทดสอบ collector ทำงานต่อเนื่อง 24 ชม. + วัด CPU/RAM ทุก 60 วินาที |
+| `docs/thesis_tools/scripts/apply.sh` | แก้เล่ม docx ด้วยสคริปต์ → validate → render PDF |
 | `scripts/report.py` | คำนวณ Detection Rate, Latency, FP/ชม., Precision สำหรับบทที่ 4 |
 | `tests/test_rules.py` | ทดสอบทุกกฎด้วย event จำลอง |
 | `.streamlit/config.toml` | ธีมสีของ Dashboard |
