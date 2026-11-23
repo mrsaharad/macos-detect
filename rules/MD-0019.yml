@@ -18,7 +18,16 @@ detection:
     - ' -d'
     - ' --decode'
     - ' -D'
-  condition: selection
+  # v2: จากผล Atomic ชุด eval ของ v1 (T1140-4, T1140-8) — ถอดรหัสด้วย perl หรือแปลง hex ด้วย xxd
+  selection_perl:
+    Image|endswith: /perl
+    CommandLine|contains:
+    - decode_base64
+    - MIME::Base64
+  selection_xxd:
+    Image|endswith: /xxd
+    CommandLine|contains: ' -r'
+  condition: 1 of selection*
 falsepositives:
 - นักพัฒนาถอดรหัสข้อมูลทั่วไป
 level: low

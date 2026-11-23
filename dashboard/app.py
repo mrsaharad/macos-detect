@@ -20,7 +20,7 @@ import re
 import socket
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -31,9 +31,11 @@ from urllib.parse import parse_qsl
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from engine.rules import load_rules   # noqa: E402
+from engine.incidents import group as group_incidents  # noqa: E402
 
 DB = os.environ.get("DETECT_DB", os.path.join(ROOT, "data", "detect.db"))
-VDB = os.path.join(os.path.dirname(DB), "verdicts.db")   # ผลตัดสินแยกไฟล์ ไม่แย่งสิทธิ์เขียนกับ collector
+# ผลตัดสินแยกไฟล์ ไม่แย่งสิทธิ์เขียนกับ collector (v2: อยู่ใน data/ เสมอ เพราะ DB ของ LaunchDaemon เป็นของ root)
+VDB = os.environ.get("DETECT_VERDICT_DB", os.path.join(ROOT, "data", "verdicts.db"))
 TZ = "Asia/Bangkok"
 
 SEV = {"critical": ("Critical", "#f2555a"), "high": ("High", "#f08c3c"),
@@ -128,7 +130,22 @@ def load_alerts():
         df[col] = df["rule_id"].map(lambda r, c=col: meta.get(r, {}).get(c, ""))
     df["t"] = parse_ts(df["ts_event"])
     df["latency"] = ((parse_ts(df["ts_alert"]) - df["t"]).dt.total_seconds() * 1000).astype(float)
+    inc = incidents_for(int(df["id"].max()), len(df))
+    df["incident"] = df["id"].map(lambda i: inc[0].get(int(i)))
+    df["incident_root"] = df["incident"].map(lambda k: inc[1].get(k, {}).get("root_image"))
     return df
+
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def incidents_for(max_id, n):
+    """v2: รวม alert เป็น incident (engine/incidents.py) — คำนวณใหม่เมื่อมี alert เพิ่มเท่านั้น"""
+    with connect() as db:
+        rows = db.execute("SELECT a.id, a.event_id, e.pid, e.ppid, e.Image, e.ParentImage, a.ts_event "
+                          "FROM alerts a JOIN events e ON e.id = a.event_id").fetchall()
+        al = [dict(id=r[0], event_id=r[1], pid=r[2], ppid=r[3], Image=r[4], ParentImage=r[5],
+                   t=parse_ts(pd.Series([r[6]]))[0]) for r in rows]
+        assign, info = group_incidents(db, al)
+    return assign, {k: {"root_image": v["root_image"], "root_pid": v["root_pid"]} for k, v in info.items()}
 
 
 def process_chain(r, depth=5):
@@ -429,15 +446,29 @@ iframe{display:block}
 """
 
 
-def page_shell(active, body, open_count, last_age):
+def page_shell(active, body, open_count, state):
+    """state = sensor_state(): อายุ event ล่าสุด, อายุ heartbeat ล่าสุด (v2), event ที่หล่นใน 24 ชม."""
     name, os_line = machine()
-    on = last_age is not None and last_age < 30
+    state = state or {}
+    last_age, hb_age, dropped = state.get("event_age"), state.get("hb_age"), state.get("dropped", 0)
+    # v2: collector เขียน heartbeat ทุก 60 วินาที ถ้าเงียบเกิน 150 วินาที = sensor หยุดหรือถูกปิด
+    silent = hb_age is not None and hb_age >= 150
+    on = (hb_age is not None and not silent) or (hb_age is None and last_age is not None and last_age < 30)
     if last_age is None:
         age = "No events yet"
     elif last_age < 120:
         age = f"Last event {int(last_age)} seconds ago"
     else:
         age = f"Last event {int(last_age // 60)} minutes ago"
+    if dropped:
+        age += f"<br>{dropped:,} events dropped in 24 h"
+    status = "Monitoring" if on else ("Sensor silent" if silent else "Collector stopped")
+    color = "#3fb97a" if on else ("#e5484d" if silent else "#5d6578")
+    if silent:
+        mins = int(hb_age // 60)
+        body = (f'<div role="alert" style="background:#3b1219;border:1px solid #e5484d;color:#ffd1d4;padding:12px 16px;'
+                f'border-radius:8px;margin-bottom:16px"><b>Sensor silent for {mins} minutes.</b> The collector or eslogger '
+                'stopped sending heartbeats. If nobody stopped it on purpose, it may have been killed.</div>' + body)
     items = [("overview", "Overview", None), ("alerts", "Alerts", open_count), ("events", "Event search", None),
              ("rules", "Rules &amp; ATT&amp;CK", None)]
     nav = "".join(
@@ -448,18 +479,26 @@ def page_shell(active, body, open_count, last_age):
 <aside class="side">
   <div class="brand"><span style="color:#c9c0ff;display:flex">{icon("shield", 22)}</span><div><b>macOS Detect</b><span>{e(name)}</span></div></div>
   <nav class="nav" aria-label="Main">{nav}</nav>
-  <div class="status"><b><span class="dot" style="background:{"#3fb97a" if on else "#5d6578"}"></span>
-    {"Monitoring" if on else "Collector stopped"}</b><div>{age}</div><div>{e(os_line)}</div></div>
+  <div class="status"><b><span class="dot" style="background:{color}"></span>
+    {status}</b><div>{age}</div><div>{e(os_line)}</div></div>
 </aside>
 <main class="main"><div class="wrap">{body}</div></main>
 </div>"""
 
 
-def last_event_age():
-    t = q("SELECT MAX(ts_ingest) t FROM events")["t"][0]
-    if not t:
-        return None
-    return (datetime.now(timezone.utc) - parse_ts(pd.Series([t]))[0]).total_seconds()
+def _age(t):
+    return None if not t else (datetime.now(timezone.utc) - parse_ts(pd.Series([t]))[0]).total_seconds()
+
+
+def sensor_state():
+    out = {"event_age": _age(q("SELECT MAX(ts_ingest) t FROM events")["t"][0])}
+    try:                                             # ตาราง health มีเฉพาะฐานข้อมูลที่ collector v2 เคยเขียน
+        h = q("SELECT MAX(ts) t, (SELECT COALESCE(SUM(dropped),0) FROM health WHERE ts >= ?) d FROM health",
+              ((datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%S"),))
+        out["hb_age"], out["dropped"] = _age(h["t"][0]), int(h["d"][0] or 0)
+    except Exception:
+        pass
+    return out
 
 
 # ================================================================ หน้า: Overview
@@ -544,6 +583,36 @@ def overview_body(a, rng):
 
 
 # ================================================================ หน้า: Alerts
+VIEWS = {"alerts": "Alerts", "incidents": "Incidents"}
+
+
+def incidents_table(view, per):
+    """v2: 1 แถว = 1 incident (alert ที่มาจากต้นตอเดียวกันในช่วงใกล้กัน)"""
+    rank = {s: i for i, s in enumerate(SEV_ORDER)}
+    g = []
+    for key, grp in view.groupby("incident"):
+        worst = min(grp["level"], key=lambda lv: rank.get(lv, 99))
+        g.append({"key": key, "first": grp["t"].min(), "last": grp["t"].max(), "n": len(grp), "level": worst,
+                  "root": grp["incident_root"].iloc[0], "titles": list(dict.fromkeys(grp.sort_values("t")["title"])),
+                  "open": int(grp["verdict"].isna().sum())})
+    g.sort(key=lambda x: x["last"], reverse=True)
+    page, pages, offset = paging(len(g), per)
+    rows = ""
+    for x in g[offset:offset + per]:
+        href = link(inc=x["key"], view=None, id=None, p=None)
+        titles = ", ".join(x["titles"][:3]) + (f" +{len(x['titles']) - 3} more" if len(x["titles"]) > 3 else "")
+        rows += (f'<tr class="rowlink"><td class="tm num"><a class="cover" href="{href}" target="_self">{local(x["last"])}</a></td>'
+                 f'<td><a class="cover" href="{href}" target="_self">{pill(x["level"])}</a></td>'
+                 f'<td><a class="cover" href="{href}" target="_self"><div style="font-weight:500">{e(basename(x["root"]))}'
+                 f' <span class="sub">· {x["n"]} alert{"s" if x["n"] != 1 else ""}</span></div>'
+                 f'<div class="sub">{e(titles)}</div></a></td>'
+                 f'<td class="num" style="font-size:13px"><a class="cover" href="{href}" target="_self">{x["open"]} open</a></td></tr>')
+    return (f'<section class="panel" aria-label="Incident list"><div class="scroll"><table class="t" style="min-width:520px">'
+            f'<thead><tr><th style="width:84px">Last seen</th><th style="width:84px">Severity</th>'
+            f'<th>Root process and detections</th><th style="width:90px">Status</th></tr></thead><tbody>{rows}</tbody></table></div>'
+            f'{pager(len(g), page, pages, per, offset)}</section>')
+
+
 def alerts_body(a):
     qp = st.query_params
     off = set(filter(None, qp.get("off", "").split(",")))
@@ -551,10 +620,14 @@ def alerts_body(a):
     text = qp.get("q", "").strip()
     period = choice("period", PERIODS, "24h")
     per = int(choice("per", PER_PAGE, "20"))
+    mode = choice("view", VIEWS, "alerts")
+    inc_sel = qp.get("inc")
     view = a
     if len(a):
         a = a[a["t"] >= period_start(period)]          # ช่วงเวลาที่เลือก (ตัวเลขหัวหน้าก็นับตามช่วงนี้)
         view = a[~a["level"].isin(off)]
+        if inc_sel:
+            view = view[view["incident"] == inc_sel]
         if status == "open":
             view = view[view["verdict"].isna()]
         elif status in VERDICT:
@@ -565,8 +638,11 @@ def alerts_body(a):
             view = view[hay.str.contains(re.escape(text), case=False)]
     open_n = int(a["verdict"].isna().sum()) if len(a) else 0
     when = "today" if period == "today" else f"in the last {PERIODS[period].lower()}"
-    head = (f'<header class="head"><div><h1>Alerts</h1><p>{len(a):,} alerts {when}, {open_n:,} awaiting review</p></div>'
-            f'{toolbar(period, per)}</header>')
+    n_inc = a["incident"].nunique() if len(a) else 0
+    sub = (f'Incident {e(inc_sel)} · <a href="{link(inc=None, id=None, p=None)}" target="_self">show all</a>'
+           if inc_sel else f'{len(a):,} alerts in {n_inc:,} incidents {when}, {open_n:,} awaiting review')
+    head = (f'<header class="head"><div><h1>Alerts</h1><p>{sub}</p></div>'
+            f'<div class="toolbar">{seg("view", VIEWS, mode, "View")}</div>{toolbar(period, per)}</header>')
 
     chips = ""
     for s in SEV_ORDER:
@@ -590,6 +666,8 @@ def alerts_body(a):
         msg = (f"No alerts {when}. The collector is watching this Mac." if not len(a)
                else "No alerts match these filters.")
         return head + filters + f'<section class="panel"><div class="empty">{msg}</div></section>'
+    if mode == "incidents" and not inc_sel:
+        return head + filters + incidents_table(view, per)
 
     page, pages, offset = paging(len(view), per)
     shown = view.iloc[offset:offset + per]
@@ -778,7 +856,7 @@ def render(page, key):
         body = events_body()
     else:
         body = rules_body()
-    show(page_shell(page, body, open_n, last_event_age()), key)
+    show(page_shell(page, body, open_n, sensor_state()), key)
 
 
 @st.fragment(run_every="3s")

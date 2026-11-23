@@ -14,8 +14,12 @@ logsource:
 detection:
   selection:
     Image|endswith: /security
+  # v2: ใช้ลายเซ็นด้วย จับสำเนาที่เปลี่ยนชื่อแต่ยังอ้าง identifier ของ Apple (ดู MD-0032 สำหรับลายเซ็นปลอม)
+  selection_signing:
+    SigningId: com.apple.security
+  command:
     CommandLine|contains: dump-keychain
-  condition: selection
+  condition: 1 of selection* and command
 falsepositives:
 - การใช้งานปกติของผู้ดูแลระบบ
 level: high

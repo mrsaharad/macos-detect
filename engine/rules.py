@@ -28,6 +28,12 @@ CATEGORY_TO_EVENTS = {
     "file_event": {"create", "rename"},   # rename ปลายทาง = ไฟล์ใหม่ปรากฏ
     "file_rename": {"rename"},
     "file_delete": {"unlink"},
+    # v2: event ชนิดใหม่จาก Endpoint Security (ไม่ใช่ category มาตรฐานของ Sigma — กำหนดเองสำหรับ macOS)
+    "file_flags": {"setflags"},                 # chflags / os.chflags (เช่น ซ่อนไฟล์)
+    "file_xattr_set": {"setextattr"},
+    "file_xattr_delete": {"deleteextattr"},     # ลบ extended attribute (เช่น ป้ายกักกัน)
+    "file_modify": {"close", "truncate"},       # ไฟล์ถูกแก้ (close ที่ modified=true) หรือถูกตัด
+    "launch_item_add": {"btm_add"},             # macOS ลงทะเบียน Login Item / LaunchAgent / LaunchDaemon
 }
 
 

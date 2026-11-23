@@ -24,7 +24,7 @@ import uuid
 from datetime import datetime, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB = os.path.join(ROOT, "data", "detect.db")
+DB = os.environ.get("DETECT_DB", os.path.join(ROOT, "data", "detect.db"))   # v2 daemon: /Library/Application Support/macdetect/data/detect.db
 RES = os.path.join(ROOT, "data", "results")
 RUNS = os.path.join(ROOT, "data", "stress_runs.csv")
 W = os.path.expanduser("~/Library/Caches/macdetect-stress")

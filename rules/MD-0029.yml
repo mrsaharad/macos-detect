@@ -1,0 +1,30 @@
+id: MD-0029
+title: Launch item registered
+title_th: macOS ลงทะเบียน Login Item / LaunchAgent / LaunchDaemon ใหม่
+status: experimental
+description: Background Task Management registered a new login item, launch agent or launch daemon. This catches persistence no matter which tool created it.
+plain_th: มีโปรแกรมใหม่ถูกตั้งให้เริ่มทำงานเองเมื่อเปิดเครื่องหรือเข้าสู่ระบบ
+author: Saharad
+version: v2
+tags:
+- attack.persistence
+- attack.t1543.001
+- attack.t1543.004
+- attack.t1547.015
+logsource:
+  product: macos
+  category: launch_item_add
+detection:
+  selection:
+    ItemType:
+    - agent
+    - daemon
+    - login_item
+  filter_apple:
+    ItemExecutable|startswith:
+    - /System/
+    - /usr/libexec/
+  condition: selection and not filter_apple
+falsepositives:
+- การติดตั้งแอปที่มีโปรแกรมทำงานเบื้องหลัง
+level: medium

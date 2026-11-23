@@ -5,6 +5,8 @@
 #           ./attacksim/run_atomic.sh eval         (รันชุด eval)
 #           ./attacksim/run_atomic.sh T1082        (รัน technique เดียว ตามเลข test ใน plan.txt)
 #           ./attacksim/run_atomic.sh T1082 2,3    (รันเฉพาะ test ที่ระบุ)
+#           ART_SET=dev-v2 ./attacksim/run_atomic.sh dev   (บันทึกชื่อชุดเป็น dev-v2 เช่น รันชุด dev ซ้ำกับ collector v2)
+# รันทีละ test และบันทึกเวลา + exit code ของแต่ละ test ลง data/test_runs.csv (ใช้ตัดสินผลระดับ test อัตโนมัติ)
 # ต้องเปิด collector ไว้อีกหน้าต่างก่อน และต้องรันใน Terminal (บาง test ใช้ sudo จะถามรหัสผ่าน 1 ครั้งตอนเริ่ม)
 # ผลของแต่ละ test (prereqs / run / cleanup / ตรวจคืนค่า) เก็บไว้ที่ data/atomic_logs/<technique>.log
 cd "$(dirname "$0")/.."
@@ -12,6 +14,8 @@ RUNS=data/runs.csv
 LOGS=data/atomic_logs
 mkdir -p $LOGS
 [[ -f $RUNS ]] || echo "technique,set,start_utc,end_utc" > $RUNS
+TRUNS=data/test_runs.csv
+[[ -f $TRUNS ]] || echo "technique,test,set,root,start_utc,end_utc,exit_code" > $TRUNS
 now() { date -u +"%Y-%m-%dT%H:%M:%S.000000Z"; }
 
 # module ไม่ถูกโหลดอัตโนมัติเมื่อใช้ -NoProfile จึงต้อง Import-Module เองทุกครั้ง
@@ -82,9 +86,22 @@ for row in $plan; do
   echo "\n===== $tech ($grp) test ${nums:-ทั้งหมด} ====="
   { echo "### $tech ($grp) test ${nums:-all} $(now)"; echo "--- prereqs"; } > $log
   art_both $tech -GetPrereqs >> $log 2>&1
+  grp=${ART_SET:-$grp}
   start=$(now)
   echo "--- run (start $start)" >> $log
-  art_both $tech 2>&1 | tee -a $log
+  if [[ -z $nums ]]; then
+    art_both $tech 2>&1 | tee -a $log
+  else
+    for n in $all; do                       # ทีละ test: เว้นช่วง 3 วินาทีให้ event ของแต่ละ test แยกจากกัน
+      num=${n%!}; [[ $n == *! ]] && runner=art_root || runner=art
+      tstart=$(now)
+      out=$($runner $tech -TestNumbers $num 2>&1)
+      print -r -- "$out" | tee -a $log
+      sleep 3
+      code=$(print -r -- "$out" | grep -o 'Exit code: -*[0-9]*' | tail -1 | grep -o -- '-*[0-9]*$')
+      echo "$tech,$num,$grp,$([[ $n == *! ]] && echo 1 || echo 0),$tstart,$(now),${code:-NA}" >> $TRUNS
+    done
+  fi
   sleep 3                                   # เผื่อเวลาให้ event ไหลเข้า collector
   end=$(now)
   echo "--- cleanup (end $end)" >> $log

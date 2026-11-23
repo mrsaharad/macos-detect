@@ -1,0 +1,22 @@
+id: MD-0032
+title: Apple signing identifier on ad-hoc signed program
+title_th: โปรแกรมเซ็นแบบ ad-hoc แต่อ้างชื่อลายเซ็นของ Apple
+status: experimental
+description: A program claims an Apple signing identifier (com.apple.*) but is only ad-hoc signed. Real Apple programs are platform binaries, so this is a renamed or re-signed copy trying to look legitimate.
+plain_th: มีโปรแกรมปลอมตัวเป็นโปรแกรมของ Apple โดยตั้งชื่อลายเซ็นเหมือนของ Apple แต่ไม่ได้ลงนามโดย Apple จริง
+author: Saharad
+version: v2
+tags:
+- attack.stealth
+- attack.t1036
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    SigningId|startswith: com.apple.
+    SignatureType: adhoc
+  condition: selection
+falsepositives:
+- นักพัฒนาที่ build โปรแกรมเองโดยใช้ identifier ขึ้นต้น com.apple.
+level: high

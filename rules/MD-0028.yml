@@ -1,0 +1,25 @@
+id: MD-0028
+title: Quarantine attribute deleted
+title_th: ลบป้ายกักกัน (quarantine) ออกจากไฟล์ (ดูที่ผลลัพธ์)
+status: experimental
+description: The com.apple.quarantine extended attribute was deleted, by xattr, a renamed copy or an API call, so Gatekeeper will not check the file.
+plain_th: มีการลบป้ายกักกันออกจากไฟล์ ทำให้ Gatekeeper ไม่ตรวจไฟล์นั้น ไม่ว่าจะใช้คำสั่งหรือโปรแกรมใด
+author: Saharad
+version: v2
+tags:
+- attack.stealth
+- attack.t1553.001
+logsource:
+  product: macos
+  category: file_xattr_delete
+detection:
+  selection:
+    ExtAttr: com.apple.quarantine
+  filter_system:
+    Image|startswith:
+    - /System/
+    - /usr/libexec/
+  condition: selection and not filter_system
+falsepositives:
+- ตัวติดตั้งหรือตัวอัปเดตของแอปที่ล้างป้ายกักกันเอง
+level: high

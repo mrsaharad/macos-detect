@@ -15,7 +15,19 @@ detection:
   selection:
     Image|endswith: /osascript
     CommandLine|contains: ' -e '
-  condition: selection
+  # v2: จากผล evasion ชุด dev — รันไฟล์สคริปต์แทน -e (ET-OSA-2) และใช้สำเนาที่เปลี่ยนชื่อ (ET-OSA-1)
+  # osascript เก็บ identifier ไว้ใน Info.plist สำเนาที่เซ็นใหม่จึงยังเป็น com.apple.osascript
+  selection_file:
+    Image|endswith: /osascript
+    CommandLine|re: '\s\S+\.(scpt|scptd|applescript|js)(\s|$)'
+  selection_signing:
+    SigningId: com.apple.osascript
+    CommandLine|contains: ' -e '
+  filter_system:
+    ParentImage|startswith:
+    - /System/
+    - /usr/libexec/
+  condition: 1 of selection* and not filter_system
 falsepositives:
 - สคริปต์อัตโนมัติของผู้ใช้
 level: medium

@@ -31,7 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from engine.rules import load_rules   # noqa: E402
 
-DB = os.path.join(ROOT, "data", "detect.db")
+DB = os.environ.get("DETECT_DB", os.path.join(ROOT, "data", "detect.db"))   # v2 daemon: /Library/Application Support/macdetect/data/detect.db
 RUNS = os.path.join(ROOT, "data", "runs.csv")
 TRIAL_RUNS = os.path.join(ROOT, "data", "runs_trial_T1082_old-rule.csv")
 PER_TEST = os.path.join(ROOT, "attacksim", "per_test_results.csv")
@@ -39,6 +39,9 @@ EVASION = os.path.join(ROOT, "data", "evasion_runs.csv")
 STRESS_RUNS = os.path.join(ROOT, "data", "stress_runs.csv")
 OUT = os.path.join(ROOT, "data", "results")
 SESSION_PAD = timedelta(minutes=10)     # เผื่อช่วง prereq/cleanup ก่อน-หลังการทดสอบแต่ละชุด
+FIELDS_V2 = ("TeamId", "SignatureType", "ParentSigningId", "ExtAttr", "Flags", "FileSize", "ItemType",
+             "ItemExecutable")
+RULES_DIR = os.path.join(ROOT, "rules")      # main() เปลี่ยนได้ด้วย --rules-ref v1
 FIELDS = ("event_type", "pid", "ppid", "Image", "ParentImage", "CommandLine",
           "TargetFilename", "SourceFilename", "SigningId", "User")
 
@@ -344,29 +347,54 @@ def test_sessions(runs):
     return [(min(a for a, _ in w) - SESSION_PAD, max(b for _, b in w) + SESSION_PAD) for w in by_set.values()]
 
 
+def rules_from_ref(ref):
+    """แตกโฟลเดอร์ rules/ จาก git tag/commit (เช่น v1) ไปไว้ที่โฟลเดอร์ชั่วคราว เพื่อรันผลของกฎชุดนั้นซ้ำได้"""
+    import subprocess
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="rules-")
+    arc = subprocess.run(["git", "-C", ROOT, "archive", ref, "rules"], capture_output=True, check=True).stdout
+    subprocess.run(["tar", "-x", "-C", tmp], input=arc, check=True)
+    return os.path.join(tmp, "rules")
+
+
+def event_fields(db):
+    have = {r[1] for r in db.execute("PRAGMA table_info(events)")}
+    return FIELDS + tuple(c for c in FIELDS_V2 if c in have)
+
+
 def replay(db, runs):
     """รันกฎชุดสุดท้ายกับ event ทุกช่วงที่ไม่ใช่การทดสอบและไม่ใช่ baseline"""
-    rules = load_rules(os.path.join(ROOT, "rules"))
+    rules = load_rules(RULES_DIR)
     ev_rows = [dict(r, technique=r["id"], set="evasion-" + r["version"]) for r in read_runs(EVASION)]
     st_rows = [dict(r, technique=r["id"], set="stress-" + r["id"] + r["start_utc"]) for r in read_runs(STRESS_RUNS)]
     excluded = test_sessions(runs + read_runs(TRIAL_RUNS) + ev_rows + st_rows)
     excluded += [(ts(r["start_utc"]), ts(r["end_utc"])) for r in runs if r["technique"] == "BASELINE"]
     minutes, hits = set(), []
-    cols = ", ".join(("ts_event",) + FIELDS)
+    fields = event_fields(db)
+    cols = ", ".join(("id", "ts_event") + fields)
     for row in db.execute(f"SELECT {cols} FROM events WHERE ts_event IS NOT NULL ORDER BY id"):
-        t = ts(row[0])
+        t = ts(row[1])
         if any(a <= t <= b for a, b in excluded):
             continue
-        minutes.add(row[0][:16])
-        rec = dict(zip(FIELDS, row[1:]))
+        minutes.add(row[1][:16])
+        rec = dict(zip(fields, row[2:]))
         for r in rules:
             if r.matches(rec):
-                hits.append(dict(rule_id=r.id, ts_event=row[0], parent=rec["ParentImage"],
-                                 image=rec["Image"], command=rec["CommandLine"] or rec["TargetFilename"]))
+                hits.append(dict(rule_id=r.id, ts_event=row[1], parent=rec["ParentImage"],
+                                 image=rec["Image"], command=rec["CommandLine"] or rec["TargetFilename"],
+                                 event_id=row[0], pid=rec["pid"], ppid=rec["ppid"]))
     hours = len(minutes) / 60
+    # v2: รวมเป็น incident (engine/incidents.py) — วัดว่าผู้วิเคราะห์ต้องเปิดดูกี่เรื่องจริงๆ
+    from engine.incidents import group
+    assign, info = group(db, [dict(id=i, event_id=h["event_id"], pid=h["pid"], ppid=h["ppid"], Image=h["image"],
+                                   ParentImage=h["parent"], t=ts(h["ts_event"])) for i, h in enumerate(hits)])
+    for i, h in enumerate(hits):
+        h["incident"] = assign.get(i)
     write_csv("replay_alerts.csv", hits)
     print(f"\n=== 6. รันกฎชุดสุดท้ายย้อนหลัง (ช่วงที่ไม่ได้ทดสอบ: เครื่องเปิด collector อยู่ {hours:.1f} ชม.) ===")
     print(f"  {len(hits)} alert = {len(hits) / hours:.2f} alert/ชม.  (มีงานพัฒนาโปรเจคปนอยู่ ไม่ใช่การใช้งานปกติล้วน)")
+    print(f"  รวมเป็น {len(info)} incident = {len(info) / hours:.2f} incident/ชม."
+          f"  (เฉลี่ย {len(hits) / max(1, len(info)):.1f} alert ต่อ incident)")
     by_rule = defaultdict(Counter)
     for h in hits:
         by_rule[h["rule_id"]][f"{base(h['parent'])} -> {base(h['image'])}"] += 1
@@ -374,6 +402,7 @@ def replay(db, runs):
         top = ", ".join(f"{k} ({n})" for k, n in c.most_common(3))
         print(f"    {rid}: {sum(c.values()):>4}   {top}")
     return {"hours": round(hours, 2), "alerts": len(hits), "fp_per_hour": round(len(hits) / hours, 2) if hours else None,
+            "incidents": len(info), "rules_dir": RULES_DIR,
             "by_rule": {rid: sum(c.values()) for rid, c in by_rule.items()}}
 
 
@@ -469,6 +498,14 @@ def overhead():
 
 
 def main():
+    global RULES_DIR
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--rules-ref", help="ใช้กฎจาก git tag/commit นี้ เช่น v1 (ค่าเริ่มต้น: โฟลเดอร์ rules/ ปัจจุบัน)")
+    args = ap.parse_args()
+    if args.rules_ref:
+        RULES_DIR = rules_from_ref(args.rules_ref)
+        print(f"ใช้กฎจาก {args.rules_ref}: {RULES_DIR}")
     db = sqlite3.connect(DB)
     events = [ts(t) for (t,) in db.execute("SELECT ts_event FROM events WHERE ts_event IS NOT NULL")]
     alerts = [dict(event_id=i, rule_id=r, technique=tq, ts_event=ts(te), ts_alert=ts(ta))
@@ -481,7 +518,7 @@ def main():
     runs = read_runs(RUNS)
     os.makedirs(OUT, exist_ok=True)
 
-    rules = load_rules(os.path.join(ROOT, "rules"))
+    rules = load_rules(RULES_DIR)
     by_rule = rule_tactics(rules)
     result = {}
     result["technique_level"], lat_all, tp_final = technique_level(events, alerts, runs)

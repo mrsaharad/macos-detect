@@ -1,0 +1,25 @@
+id: MD-0030
+title: Shell history file emptied
+title_th: ล้างไฟล์ประวัติคำสั่งจนว่าง (ดูที่ขนาดไฟล์หลังแก้)
+status: experimental
+description: A shell history file was modified and is now empty, for example with cat /dev/null > ~/.bash_history. A shell appending to its history never leaves the file empty.
+plain_th: มีการล้างประวัติคำสั่งจนไฟล์ว่าง เพื่อลบร่องรอยสิ่งที่พิมพ์ไว้
+author: Saharad
+version: v2
+tags:
+- attack.stealth
+- attack.t1070.003
+logsource:
+  product: macos
+  category: file_modify
+detection:
+  selection:
+    TargetFilename|endswith:
+    - /.zsh_history
+    - /.bash_history
+    - /.sh_history
+    FileSize: 0
+  condition: selection
+falsepositives:
+- ผู้ใช้ล้างประวัติคำสั่งเอง
+level: medium

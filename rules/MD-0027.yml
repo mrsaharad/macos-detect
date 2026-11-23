@@ -1,0 +1,25 @@
+id: MD-0027
+title: File hidden with file flags
+title_th: ซ่อนไฟล์ด้วย file flag (ดูที่ผลลัพธ์ ไม่ใช่คำสั่ง)
+status: experimental
+description: The hidden flag was set on a file. This catches chflags, renamed copies of chflags and API calls such as os.chflags, because it looks at the flag change itself.
+plain_th: มีการตั้งค่าไฟล์ให้ซ่อนจาก Finder ไม่ว่าจะใช้คำสั่งหรือโปรแกรมใดก็ตาม
+author: Saharad
+version: v2
+tags:
+- attack.stealth
+- attack.t1564.001
+logsource:
+  product: macos
+  category: file_flags
+detection:
+  selection:
+    Flags|contains: hidden
+  filter_system:
+    Image|startswith:
+    - /System/
+    - /usr/libexec/
+  condition: selection and not filter_system
+falsepositives:
+- แอปที่ซ่อนไฟล์ข้อมูลของตัวเอง
+level: medium

@@ -3,5 +3,5 @@
 cd "$(dirname "$0")"
 source .venv/bin/activate
 echo "เริ่มระบบตรวจจับ... (หยุดด้วย Ctrl+C)"
-sudo eslogger exec fork exit create rename unlink | python collector/collector.py
+sudo eslogger exec fork exit create rename unlink close truncate setflags setextattr deleteextattr btm_launch_item_add | python collector/collector.py
 exec zsh

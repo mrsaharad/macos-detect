@@ -24,6 +24,8 @@ detection:
     - HISTSIZE=0
     - set +o history
     - history -c
+    # v2: จากผล evasion ชุด dev (ET-HIS-1) ชี้ไฟล์ประวัติไปที่ /dev/null แทนการ unset
+    - HISTFILE=/dev/null
   condition: selection
 falsepositives:
 - สคริปต์ของผู้ดูแลระบบที่ตั้งใจปิดประวัติ
