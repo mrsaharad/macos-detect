@@ -35,6 +35,8 @@ DB = os.path.join(ROOT, "data", "detect.db")
 RUNS = os.path.join(ROOT, "data", "runs.csv")
 TRIAL_RUNS = os.path.join(ROOT, "data", "runs_trial_T1082_old-rule.csv")
 PER_TEST = os.path.join(ROOT, "attacksim", "per_test_results.csv")
+EVASION = os.path.join(ROOT, "data", "evasion_runs.csv")
+STRESS_RUNS = os.path.join(ROOT, "data", "stress_runs.csv")
 OUT = os.path.join(ROOT, "data", "results")
 SESSION_PAD = timedelta(minutes=10)     # เผื่อช่วง prereq/cleanup ก่อน-หลังการทดสอบแต่ละชุด
 FIELDS = ("event_type", "pid", "ppid", "Image", "ParentImage", "CommandLine",
@@ -345,7 +347,9 @@ def test_sessions(runs):
 def replay(db, runs):
     """รันกฎชุดสุดท้ายกับ event ทุกช่วงที่ไม่ใช่การทดสอบและไม่ใช่ baseline"""
     rules = load_rules(os.path.join(ROOT, "rules"))
-    excluded = test_sessions(runs + read_runs(TRIAL_RUNS))
+    ev_rows = [dict(r, technique=r["id"], set="evasion-" + r["version"]) for r in read_runs(EVASION)]
+    st_rows = [dict(r, technique=r["id"], set="stress-" + r["id"] + r["start_utc"]) for r in read_runs(STRESS_RUNS)]
+    excluded = test_sessions(runs + read_runs(TRIAL_RUNS) + ev_rows + st_rows)
     excluded += [(ts(r["start_utc"]), ts(r["end_utc"])) for r in runs if r["technique"] == "BASELINE"]
     minutes, hits = set(), []
     cols = ", ".join(("ts_event",) + FIELDS)
@@ -371,6 +375,72 @@ def replay(db, runs):
         print(f"    {rid}: {sum(c.values()):>4}   {top}")
     return {"hours": round(hours, 2), "alerts": len(hits), "fp_per_hour": round(len(hits) / hours, 2) if hours else None,
             "by_rule": {rid: sum(c.values()) for rid, c in by_rule.items()}}
+
+
+def evasion(alerts):
+    """คะแนน evasion test: variant ที่ยังถูกตรวจจับ / ทั้งหมด แยกตามเวอร์ชัน ชนิด และชุด dev/eval
+    ตรวจจับ = มี alert ใน [start, end] ของ variant  (ตรงกฎที่คาด = expected, กฎอื่น = other)"""
+    rows = read_runs(EVASION)
+    if not rows:
+        return {}
+    out_rows = []
+    for r in rows:
+        a, b = ts(r["start_utc"]), ts(r["end_utc"])
+        hit = [x for x in alerts if a <= x["ts_event"] <= b]
+        exp = [x for x in hit if x["rule_id"] in r["rules"].split()]
+        r = dict(r, detected="expected" if exp else ("other" if hit else "missed"),
+                 alert_rules=" ".join(sorted({x["rule_id"] for x in hit})))
+        out_rows.append(r)
+    write_csv("evasion_scored.csv", out_rows)
+    print("\n=== 8. Evasion test (variant ที่ยังตรวจจับได้ / ทั้งหมด) ===")
+    res = {}
+    for ver in sorted({r["version"] for r in out_rows}):
+        g = [r for r in out_rows if r["version"] == ver]
+        base = [r for r in g if r["kind"] == "base"]
+        var = [r for r in g if r["kind"] != "base"]
+        d_base = sum(r["detected"] != "missed" for r in base)
+        print(f"  [{ver}] base (วิธีเดียวกับ Atomic): {rate(d_base, len(base)) if base else '—'}")
+        res[ver] = {"base": rate_json(d_base, len(base)) if base else None}
+        for name, sub in (("variant ทั้งหมด", var), ("variant ชุด dev", [r for r in var if r["split"] == "dev"]),
+                          ("variant ชุด eval", [r for r in var if r["split"] == "eval"])):
+            if sub:
+                d = sum(r["detected"] != "missed" for r in sub)
+                print(f"  [{ver}] {name:16} {rate(d, len(sub))}")
+                res[ver][name] = rate_json(d, len(sub))
+        for kind in ("renamed", "api", "alt"):
+            sub = [r for r in var if r["kind"] == kind]
+            if sub:
+                d = sum(r["detected"] != "missed" for r in sub)
+                print(f"      ชนิด {kind:8} {d}/{len(sub)}")
+                res[ver][kind] = [d, len(sub)]
+        miss = [r["id"] for r in g if r["detected"] == "missed"]
+        if miss:
+            print(f"      หลุด: {' '.join(miss)}")
+    return res
+
+
+def stress_ab():
+    out = {}
+    st = read_runs(os.path.join(OUT, "stress.csv"))
+    if st:
+        print("\n=== 9. Stress test (exec event ที่เก็บได้เมื่อสร้างโปรเซสถี่ๆ) ===")
+        for r in st:
+            print(f"  [{r['version']}] {r['target_rate']:>4}/s (จริง {r['actual_rate']}/s): เก็บได้ {r['captured']}/{r['spawned']}"
+                  f"  หล่น {r['loss_pct']}%  lag สูงสุด {r['max_lag_ms']} ms  ตามทันใน {r['catch_up_s']} s")
+        out["stress"] = st
+    ab = read_runs(os.path.join(OUT, "ab.csv"))
+    if ab:
+        print("\n=== 10. A/B overhead (งานมาตรฐาน 3,000 โปรเซส + 3,000 ไฟล์ × 5 รอบ) ===")
+        for ver in sorted({r["version"] for r in ab}):
+            g = {r["state"]: r for r in ab if r["version"] == ver}
+            for state in ("off", "on"):
+                if state in g:
+                    print(f"  [{ver}] collector {state:3}: {g[state]['mean_s']} s (SD {g[state]['sd_s']})")
+            if "on" in g and "off" in g:
+                d = (float(g["on"]["mean_s"]) / float(g["off"]["mean_s"]) - 1) * 100
+                print(f"  [{ver}] ช้าลง {d:.1f}% เมื่อเปิด collector")
+                out.setdefault("ab", {})[ver] = round(d, 2)
+    return out
 
 
 def overhead():
@@ -438,6 +508,8 @@ def main():
         pass
 
     result["replay"] = replay(db, runs)
+    result["evasion"] = evasion(alerts)
+    result["stress_ab"] = stress_ab()
     result["overhead"] = overhead()
     with open(os.path.join(OUT, "summary.json"), "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2, default=str)
