@@ -3,6 +3,7 @@
 # ใช้ framework ทางการ Invoke-AtomicRedTeam ของ Red Canary — สคริปต์นี้แค่ "กดปุ่ม" จดเวลา และคืนค่าเครื่อง
 # วิธีใช้:  ./attacksim/run_atomic.sh dev          (รันชุด dev ตาม plan.txt)
 #           ./attacksim/run_atomic.sh eval         (รันชุด eval)
+#           ./attacksim/run_atomic.sh eval2        (รันชุด eval2 สำหรับวัดผล v2 — attacksim/eval2_review.md)
 #           ./attacksim/run_atomic.sh T1082        (รัน technique เดียว ตามเลข test ใน plan.txt)
 #           ./attacksim/run_atomic.sh T1082 2,3    (รันเฉพาะ test ที่ระบุ)
 #           ART_SET=dev-v2 ./attacksim/run_atomic.sh dev   (บันทึกชื่อชุดเป็น dev-v2 เช่น รันชุด dev ซ้ำกับ collector v2)
@@ -41,7 +42,7 @@ art_both() {
 # ---------- เลือกสิ่งที่จะรัน ----------
 rows=("${(@f)$(grep -v '^#' attacksim/plan.txt | grep -v '^\s*$')}")
 case "$1" in
-  dev|eval) plan=(${(M)rows:#* $1 *}) ;;
+  dev|eval|eval2) plan=(${(M)rows:#* $1 *}) ;;
   T*)       row=${(M)rows:#$1 *}
             [[ -n $2 ]] && plan=("$1 manual $2") || plan=("${row:-$1 manual}") ;;
   *)        echo "ใช้: $0 dev | eval | <technique> [เลข test]"; exit 1 ;;
@@ -69,7 +70,13 @@ restore() {   # $1 = technique, ผลเขียนลง log
       done ;;
     T1053.003)
       [[ $HAD_CRONTAB == 0 ]] && crontab -r 2>/dev/null && echo "restore: ลบ crontab ที่ test สร้าง (เดิมไม่มี)" ;;
+    T1560.001)                # cleanup ของ test 6 ลบแค่ไฟล์ .gz ไม่ลบไฟล์ข้อมูลปลอมใน home
+      rm -f ~/victim-gzip.txt && echo "restore: ลบ ~/victim-gzip.txt" ;;
   esac
+  # eval2: ตรวจสิ่งที่ test ฝังไว้ว่า cleanup ลบหมดแล้ว
+  [[ -e /Library/StartupItems/atomic.sh || -e /Library/StartupItems/StartupParameters.plist ]] && echo "check: ⚠️ เหลือไฟล์ใน /Library/StartupItems"
+  defaults read com.apple.loginwindow LoginHook >/dev/null 2>&1 && echo "check: ⚠️ ยังมี LoginHook"
+  [[ -e /tmp/hello || -e /tmp/evilBinary ]] && echo "check: ⚠️ เหลือไฟล์ setuid ใน /tmp"
   # ตรวจว่าเครื่องกลับสู่สภาพปลอดภัย
   echo "check: Gatekeeper = $(spctl --status 2>&1)"
   local left=(~/Library/LaunchAgents/com.atomicredteam*(N) /Library/LaunchAgents/com.atomicredteam*(N)

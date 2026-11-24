@@ -1,0 +1,155 @@
+order	technique	test	privilege	name
+1	T1497.001	8	user	Detect Virtualization Environment using system_profiler
+2	T1021.005	1	root	Enable Apple Remote Desktop Agent
+3	T1105	5	user	sftp remote file copy (push)
+4	T1222.002	3	user	chmod - Change file or folder mode (numeric mode) recursively
+5	T1552.001	15	user	Find Azure credentials
+6	T1497.001	4	user	Detect Virtualization Environment via ioreg
+7	T1543.001	2	root	Event Monitor Daemon Persistence
+8	T1685.006	17	root	Delete system log files using Applescript
+9	T1546.018	5	user	Python Startup Hook - usercustomize.py (Linux / MacOS)
+10	T1547.007	2	root	Re-Opened Applications using LoginHook
+11	T1518	3	user	Find and Display Safari Browser Version
+12	T1222.002	8	user	chown - Change file or folder ownership recursively
+13	T1552.001	19	user	Access Gitlab CI Config File
+14	T1546.014	1	root	Persistance with Event Monitor - emond
+15	T1070.004	2	user	Delete an entire folder - FreeBSD/Linux/macOS
+16	T1496	1	user	FreeBSD/macOS/Linux - Simulate CPU Load with Yes
+17	T1546.018	4	user	Python Startup Hook - atomic_hook.pth (macOS)
+18	T1123	3	user	using Quicktime Player
+19	T1083	4	user	Nix File and Directory Discovery 2
+20	T1552.004	5	user	Copy Private SSH Keys with rsync
+21	T1070.006	3	root	Set a file's creation timestamp
+22	T1115	3	user	Execute commands from clipboard
+23	T1222.002	11	user	Chmod through c script
+24	T1036.005	1	user	Execute a process from a directory masquerading as the current parent directory
+25	T1049	5	user	System Network Connections Discovery FreeBSD, Linux & MacOS
+26	T1552.004	7	user	Copy the users GnuPG directory with rsync
+27	T1548.003	3	root	Unlimited sudo cache timeout
+28	T1059.004	15	user	Creating shell using cpan command
+29	T1548.003	5	root	Disable tty_tickets for sudo caching
+30	T1070.006	9	user	MacOS - Timestomp Date Modified
+31	T1078.003	5	root	Add a new/existing user to the admin group using dseditgroup utility - macOS
+32	T1685.002	5	user	AWS - CloudTrail Logs Impairment Through S3 Lifecycle Rule using Stratus
+33	T1048	4	user	Exfiltrate Data using DNS Queries via dig
+34	T1552.001	31	user	Find Kubernetes user configuration files
+35	T1685.006	9	root	Overwrite macOS system log via echo utility
+36	T1070.008	6	root	Copy and Modify Mailbox Data on macOS
+37	T1685	50	root	Tamper with Defender ATP on Linux/MacOS
+38	T1059.004	17	root	emacs spawning an interactive system shell
+39	T1548.003	1	root	Sudo usage
+40	T1555.001	3	user	Import Certificate Item(s) into Keychain
+41	T1555.001	2	user	Export Certificate Item(s)
+42	T1070.006	4	user	Modify file timestamps using reference file
+43	T1552.001	25	user	Search for Git Credential Files
+44	T1552.001	27	user	Find database credential files
+45	T1547.006	3	root	MacOS - Load Kernel Module via KextManagerLoadKextWithURL()
+46	T1553.004	4	root	Install root CA on macOS
+47	T1546.005	1	user	Trap EXIT
+48	T1552.001	1	user	Find AWS credentials
+49	T1552.001	30	user	Access Jenkinsfile
+50	T1069.001	1	user	Permission Groups Discovery (Local)
+51	T1222.002	13	root	Chown through c script
+52	T1222.002	5	user	chown - Change file or folder ownership and group
+53	T1222.002	1	user	chmod - Change file or folder mode (numeric mode)
+54	T1572	5	user	Microsoft Dev tunnels (Linux/macOS)
+55	T1552.001	29	user	Find npm registry credential files
+56	T1685.006	15	root	Delete system log files using srm utility
+57	T1548.001	1	root	Make and modify binary from C source
+58	T1546.005	5	user	Trap DEBUG - Log All Shell Commands
+59	T1037.005	3	root	Add launch script to launch agent
+60	T1552.001	20	user	Find Terraform credential files
+61	T1552.001	26	user	Find .env Files Containing Application Credentials
+62	T1652	5	user	Find Kernel Extensions (macOS)
+63	T1222.002	9	user	chattr - Remove immutable file attribute
+64	T1552.003	3	user	Search Through Zsh History
+65	T1124	3	user	System Time Discovery in FreeBSD/macOS
+66	T1652	4	user	List loaded kernel extensions (macOS)
+67	T1222.002	4	user	chmod - Change file or folder mode (symbolic mode) recursively
+68	T1113	2	user	Screencapture (silent)
+69	T1552.001	2	root	Extract Browser and System credentials with LaZagne
+70	T1560.001	5	root	Data Compressed - nix - zip
+71	T1027.002	3	user	Binary simply packed by UPX
+72	T1560.001	13	user	Data Compressed - macOS - ditto Archive of a Sensitive Directory
+73	T1485	2	user	FreeBSD/macOS/Linux - Overwrite file with DD
+74	T1555.003	14	user	Simulating Access to Chrome Login Data - MacOS
+75	T1552.001	16	user	Find GCP credentials
+76	T1497.003	1	user	Delay execution with ping
+77	T1222.002	7	user	chown - Change file or folder mode ownership only
+78	T1555.003	18	user	Query Chrome Login Data In Place with sqlite3 - MacOS
+79	T1105	1	root	rsync remote file copy (push)
+80	T1046	1	user	Port Scan
+81	T1548.001	3	root	Set a SetUID flag on file
+82	T1046	12	root	Port Scan using nmap (Port range)
+83	T1552.001	21	user	Find Docker credentials
+84	T1685.006	16	root	Delete system log files using OSAScript
+85	T1560.001	7	user	Data Compressed - nix - tar Folder or File
+86	T1027.004	5	user	Go compile
+87	T1105	6	user	sftp remote file copy (pull)
+88	T1552.004	2	user	Discover Private SSH Keys
+89	T1070.006	2	user	Set a file's modification timestamp
+90	T1555.001	1	root	Keychain Dump
+91	T1685.002	4	user	AWS - Disable CloudTrail Logging Through Event Selectors using Stratus
+92	T1552.003	1	user	Search Through Bash History
+93	T1027.004	3	user	C compile
+94	T1547.007	1	user	Copy in loginwindow.plist for Re-Opened Applications
+95	T1685.006	1	root	rm -rf
+96	T1056.002	3	user	AppleScript - Spoofing a credential prompt using osascript
+97	T1560.001	6	user	Data Compressed - nix - gzip Single File
+98	T1049	4	user	System Network Connections Discovery via ss or lsof (Linux/MacOS)
+99	T1007	5	user	System Service Discovery - macOS launchctl
+100	T1053.003	2	root	Cron - Add script to all cron subfolders
+101	T1539	5	user	Copy Safari BinaryCookies files using AppleScript
+102	T1105	2	user	rsync remote file copy (pull)
+103	T1497.001	6	user	Detect Virtualization Environment using sysctl (hw.model)
+104	T1018	6	user	Remote System Discovery - arp nix
+105	T1027	1	user	Decode base64 Data into Script
+106	T1030	1	user	Data Transfer Size Limits
+107	T1690	1	user	Disable history collection
+108	T1070.008	3	root	Copy and Delete Mailbox Data on macOS
+109	T1552.001	6	user	Find and Access Github Credentials
+110	T1552.001	22	user	Find HashiCorp Vault token files
+111	T1037.004	1	root	rc.common
+112	T1018	7	user	Remote System Discovery - sweep
+113	T1564.001	5	user	Hidden files
+114	T1547.007	3	user	Append to existing loginwindow for Re-Opened Applications
+115	T1685.006	12	root	Delete system log files via unlink utility
+116	T1555.003	2	user	Search macOS Safari Cookies
+117	T1005	3	user	Copy Apple Notes database files using AppleScript
+118	T1580	1	user	AWS - EC2 Enumeration from Cloud Instance
+119	T1040	3	root	Packet Capture macOS using tcpdump or tshark
+120	T1090.001	2	user	Connection Proxy for macOS UI
+121	T1036.006	2	user	Space After Filename
+122	T1552.001	23	user	Access Drone CI Config File
+123	T1685.002	6	user	AWS - Remove VPC Flow Logs using Stratus
+124	T1555.001	4	user	Copy Keychain using cat utility
+125	T1027.004	4	user	CC compile
+126	T1486	7	user	Encrypt files using openssl utility - macOS
+127	T1572	7	user	Cloudflare tunnels (Linux/macOS)
+128	T1090.003	4	user	Tor Proxy Usage - MacOS
+129	T1037.005	2	root	Add launch script to launch daemon
+130	T1560.001	9	user	Encrypts collected data with AES-256 and Base64
+131	T1040	8	root	Packet Capture macOS using /dev/bpfN with sudo
+132	T1572	6	user	VSCode tunnels (Linux/macOS)
+133	T1037.005	1	root	Add file to Local Library StartupItems
+134	T1222.002	2	user	chmod - Change file or folder mode (symbolic mode)
+135	T1135	1	user	Network Share Discovery
+136	T1490	12	root	Disable Time Machine
+137	T1056.001	8	user	MacOS Swift Keylogger
+138	T1040	9	root	Filtered Packet Capture macOS using /dev/bpfN with sudo
+139	T1564.001	2	user	Mac Hidden file
+140	T1552.001	17	user	Find OCI credentials
+141	T1070.006	1	user	Set a file's access timestamp
+142	T1016.001	2	user	Check internet connection using ping freebsd, linux or macos
+143	T1685.006	14	root	Delete system log files using shred utility
+144	T1552.004	17	user	Find TLS private key files
+145	T1222.002	6	user	chown - Change file or folder ownership and group recursively
+146	T1548.001	5	root	Set a SetGID flag on file
+147	T1113	1	user	Screencapture
+148	T1571	2	user	Testing usage of uncommonly used port
+149	T1078.003	4	root	Enable root account using dsenableroot utility - MacOS
+150	T1070.004	1	user	Delete a single file - FreeBSD/Linux/macOS
+151	T1552.001	18	user	Access Travis CI Config File
+152	T1574.006	3	user	Dylib Injection via DYLD_INSERT_LIBRARIES
+153	T1027.002	4	user	Binary packed by UPX, with modified headers
+154	T1018	23	user	Enumerate SSH Configuration
