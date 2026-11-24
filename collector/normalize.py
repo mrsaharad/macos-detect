@@ -191,7 +191,8 @@ class Normalizer:
         rec["ParentSigningId"] = self.pid_signing.get(rec["ppid"])
 
         # อัปเดต cache ให้ event ถัดไปใช้ (btm_add รายงาน instigator ซึ่งไม่ใช่โปรเซสที่ส่ง event จึงข้าม)
-        if kind != "btm_launch_item_add" and rec["pid"] is not None and rec["Image"]:
+        # close มาจาก eslogger อีกตัว (--spawn) จึงอาจมาถึงหลัง exit ของโปรเซสเดียวกัน ไม่ให้มันใส่ pid ที่ตายแล้วกลับเข้า cache
+        if kind not in ("btm_launch_item_add", "close") and rec["pid"] is not None and rec["Image"]:
             self.pid_image[rec["pid"]] = rec["Image"]
             if rec["SigningId"]:
                 self.pid_signing[rec["pid"]] = rec["SigningId"]

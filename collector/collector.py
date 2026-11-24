@@ -17,8 +17,10 @@ import json
 import os
 import re
 import shutil
+import queue
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -56,6 +58,81 @@ HEALTH_EVERY = 60          # วินาที — บันทึก heartbeat
 # v2: event ที่ subscribe (ใช้กับ --spawn และ start_collector.command)
 ES_EVENTS = ["exec", "fork", "exit", "create", "rename", "unlink", "close", "truncate", "setflags", "setextattr",
              "deleteextattr", "btm_launch_item_add"]
+# --spawn แยก eslogger เป็น 2 โปรเซส: close มีมาก (~40 ครั้งต่อโปรเซส) จน eslogger ตัวเดียวใช้ CPU เต็มคอร์
+# ตอนโหลดสูง แล้ว exec ต้องรอคิวหลัง close นานหลายนาที (stress v2) แยกแล้ว event ที่กฎใช้ไม่ต้องรอ close
+ES_MAIN = [e for e in ES_EVENTS if e != "close"]
+ES_CLOSE = ["close"]
+
+
+class Window:
+    """ตัวนับของ heartbeat (thread-safe เพราะ --spawn อ่าน eslogger 2 ตัวจาก 2 thread)"""
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.reset()
+
+    def reset(self):
+        self.c = {"events": 0, "stored": 0, "dropped": 0, "pruned": 0}
+
+    def add(self, key, n=1):
+        with self.lock:
+            self.c[key] += n
+
+    def take(self):
+        with self.lock:
+            c, self.c = self.c, {"events": 0, "stored": 0, "dropped": 0, "pruned": 0}
+        return c
+
+
+def prefilter(line, last, win):
+    """คัดบรรทัดแบบถูกๆ ก่อนแปลง JSON: นับ event, ตรวจเลขลำดับที่ขาด (ต่อ eslogger หนึ่งตัว), ทิ้ง close ที่ไม่ได้แก้ไฟล์
+    last = [global_seq_num ล่าสุดของ stream นี้]  คืนบรรทัด หรือ None ถ้าทิ้ง"""
+    line = line.strip()
+    if not line.startswith("{"):          # ยามหน้าประตู: ไม่ใช่ JSON ข้าม
+        return None
+    m = SEQ.search(line)
+    if m:
+        seq = int(m.group(1))
+        if last[0] is not None and seq > last[0] + 1:
+            win.add("dropped", seq - last[0] - 1)
+        last[0] = seq
+    win.add("events")
+    if CLOSE_UNMODIFIED.search(line):
+        return None
+    return line
+
+
+def spawn_streams(win):
+    """เปิด eslogger 2 ตัว แต่ละตัวมี thread อ่านแล้วคัดบรรทัด ส่งเข้าคิวเดียวที่ให้ event หลักมาก่อน close
+    คืน (generator ของบรรทัด, รายการโปรเซส) — eslogger ตัวใดจบ generator จบ (launchd จะเปิด collector ใหม่)"""
+    q = queue.PriorityQueue(maxsize=200000)
+    n = [0]
+    nlock = threading.Lock()
+    procs = []
+
+    def reader(proc, prio):
+        last = [None]
+        for raw in proc.stdout:
+            line = prefilter(raw, last, win)
+            if line is not None:
+                with nlock:
+                    n[0] += 1
+                    k = n[0]
+                q.put((prio, k, line))
+        q.put((2, 0, None))               # eslogger ตัวนี้จบ (ลำดับท้ายสุด: ประมวลผลบรรทัดที่ค้างในคิวก่อน)
+
+    for prio, events in ((0, ES_MAIN), (1, ES_CLOSE)):
+        p = subprocess.Popen(["/usr/bin/eslogger"] + events, stdout=subprocess.PIPE, text=True, bufsize=1)
+        procs.append(p)
+        threading.Thread(target=reader, args=(p, prio), daemon=True).start()
+
+    def gen():
+        while True:
+            _, _, line = q.get()
+            if line is None:
+                print("[collector] eslogger หยุดทำงาน ออกเพื่อให้ launchd เปิดใหม่", file=sys.stderr)
+                return
+            yield line
+    return gen(), procs
 
 
 def now_utc():
@@ -79,43 +156,29 @@ def main():
     rules = load_rules(args.rules)
     db = store.connect(args.db)
     norm = Normalizer()
-    es_proc = None
-    if args.file:
-        src = open(args.file, encoding="utf-8")
-    elif args.spawn:
-        es_proc = subprocess.Popen(["/usr/bin/eslogger"] + ES_EVENTS, stdout=subprocess.PIPE, text=True, bufsize=1)
-        src = es_proc.stdout
+    win = Window()
+    es_procs = []
+    if args.spawn:
+        lines, es_procs = spawn_streams(win)
     else:
-        src = sys.stdin
-    print(f"[collector] โหลดกฎ {len(rules)} ข้อ  เก็บที่ {args.db}", file=sys.stderr)
+        src = open(args.file, encoding="utf-8") if args.file else sys.stdin
+        last = [None]
+        lines = (x for x in (prefilter(raw, last, win) for raw in src) if x is not None)
+    print(f"[collector] โหลดกฎ {len(rules)} ข้อ  เก็บที่ {args.db}"
+          + ("  (eslogger 2 ตัว: หลัก + close)" if args.spawn else ""), file=sys.stderr)
 
     n_events = n_alerts = 0
     next_prune = 0.0
-    last_seq = None
-    win = {"events": 0, "stored": 0, "dropped": 0, "pruned": 0}
     next_health = time.monotonic() + HEALTH_EVERY
     store.insert_health(db, now_utc(), 0, 0, 0, 0)          # จุดเริ่มทำงาน
     try:
-        for line in src:
-            line = line.strip()
-            if not line.startswith("{"):          # ยามหน้าประตู: ไม่ใช่ JSON ข้าม
-                continue
-            # ตรวจ event หล่น: global_seq_num ต้องเพิ่มทีละ 1 สำหรับ client เดียวกัน
-            m = SEQ.search(line)
-            if m:
-                seq = int(m.group(1))
-                if last_seq is not None and seq > last_seq + 1:
-                    win["dropped"] += seq - last_seq - 1
-                last_seq = seq
-            win["events"] += 1
+        for line in lines:
             if time.monotonic() >= next_health and not args.file:
-                store.insert_health(db, now_utc(), win["events"], win["stored"], win["dropped"], win["pruned"])
-                if win["dropped"]:
-                    print(f"[collector] ⚠️ event หล่น {win['dropped']} รายการในนาทีที่ผ่านมา", file=sys.stderr)
-                win = dict.fromkeys(win, 0)
+                c = win.take()
+                store.insert_health(db, now_utc(), c["events"], c["stored"], c["dropped"], c["pruned"])
+                if c["dropped"]:
+                    print(f"[collector] ⚠️ event หล่น {c['dropped']} รายการในนาทีที่ผ่านมา", file=sys.stderr)
                 next_health = time.monotonic() + HEALTH_EVERY
-            if CLOSE_UNMODIFIED.search(line):
-                continue
             try:
                 e = json.loads(line)
             except json.JSONDecodeError:           # บรรทัดเสีย (เช่นถูกตัดกลางทาง) ข้าม ไม่ล้ม
@@ -125,14 +188,14 @@ def main():
                 continue
             if args.retention_days and time.monotonic() >= next_prune:
                 removed = store.prune(db, args.retention_days)
-                win["pruned"] += removed
+                win.add("pruned", removed)
                 print(f"[collector] retention: ลบ event เก่ากว่า {args.retention_days:g} วัน {removed} รายการ",
                       file=sys.stderr)
                 next_prune = time.monotonic() + 3600
             rec["ts_ingest"] = now_utc()
             event_id = store.insert_event(db, rec)
             n_events += 1
-            win["stored"] += 1
+            win.add("stored")
 
             hits = []
             for rule in rules:
@@ -152,8 +215,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        if es_proc:
-            es_proc.terminate()
+        for p in es_procs:
+            p.terminate()
         db.close()
         print(f"\n[collector] จบ: event {n_events}  alert {n_alerts}", file=sys.stderr)
 
