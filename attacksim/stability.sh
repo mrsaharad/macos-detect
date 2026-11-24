@@ -9,4 +9,4 @@ mins=${1:-1440}
 PY=python3; [[ -x .venv/bin/python ]] && PY=.venv/bin/python
 echo "เริ่มทดสอบความเสถียร $mins นาที (ถึงประมาณ $(date -v+${mins}M '+%d/%m %H:%M'))"
 echo "ห้ามปิดเครื่อง/รีสตาร์ท/ปิด Terminal ของ collector  |  ระหว่างนี้รัน baseline.sh 480 ช่วงใช้งานปกติได้"
-caffeinate -i -s $PY scripts/measure_overhead.py --minutes $mins --interval 60 --tag stability
+caffeinate -i -s $PY scripts/measure_overhead.py --minutes $mins --interval 60 --tag ${TAG:-stability}

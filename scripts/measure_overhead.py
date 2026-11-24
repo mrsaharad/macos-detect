@@ -57,19 +57,29 @@ def cpu_seconds(text):
 
 
 def find_targets(table):
-    """หา eslogger ตัวจริง และ collector ที่รับข้อมูลจาก eslogger ตัวนั้น (อยู่ใต้ shell เดียวกัน)"""
+    """หา collector ที่ทำงานสด และ eslogger ทุกตัวที่ป้อนข้อมูลให้มัน
+    v2.1 (--spawn): eslogger 2 ตัวเป็นลูกของ collector  |  v1 (ต่อท่อ): eslogger อยู่ใต้ shell เดียวกับ collector"""
     eslogger = [p for p, (_, _, _, c) in table.items() if c.split()[0].endswith("eslogger")]
     collectors = [p for p, (_, _, _, c) in table.items()
                   if "collector/collector.py" in c and "--file" not in c]
     if not eslogger or not collectors:
         return None
+    for col in collectors:
+        kids = [e for e in eslogger if table[e][0] == col]
+        if kids:
+            return {"collector": col, "eslogger": kids}
     es = eslogger[0]
     ancestors, p = set(), es
     while p in table and p > 1:                 # ไล่ขึ้นไปหา shell ที่เป็นแม่ของทั้งคู่
         ancestors.add(table[p][0])
         p = table[p][0]
     paired = [c for c in collectors if table[c][0] in ancestors]
-    return {"eslogger": es, "collector": (paired or collectors)[0]}
+    return {"collector": (paired or collectors)[0], "eslogger": [es]}
+
+
+def usage(table, pids):
+    """(เวลา CPU รวม, RSS รวม KB) ของรายการ pid"""
+    return sum(table[p][1] for p in pids), sum(table[p][2] for p in pids)
 
 
 def event_count():
@@ -124,17 +134,17 @@ def main():
     try:
         while time.monotonic() - start_wall < args.minutes * 60:
             table, now = ps_table(), time.monotonic()
-            if any(p not in table for p in targets.values()):
+            if targets["collector"] not in table or any(p not in table for p in targets["eslogger"]):
                 stopped = datetime.now(timezone.utc).isoformat(timespec="seconds")
                 print(f"[overhead] collector หรือ eslogger หยุดทำงานเมื่อ {stopped} — จบการวัด", file=sys.stderr)
                 break
-            cur = {k: table[p] for k, p in targets.items()}
+            cur = {"collector": usage(table, [targets["collector"]]), "eslogger": usage(table, targets["eslogger"])}
             if prev:
                 dt = now - prev[0]
                 row = {"ts_utc": datetime.now(timezone.utc).isoformat(timespec="seconds")}
                 for k in targets:
-                    row[f"{k}_cpu_pct"] = round((cur[k][1] - prev[1][k][1]) / dt * 100, 2)
-                    row[f"{k}_rss_mb"] = round(cur[k][2] / 1024, 1)
+                    row[f"{k}_cpu_pct"] = round((cur[k][0] - prev[1][k][0]) / dt * 100, 2)
+                    row[f"{k}_rss_mb"] = round(cur[k][1] / 1024, 1)
                 row["total_cpu_pct"] = round(row["collector_cpu_pct"] + row["eslogger_cpu_pct"], 2)
                 row["total_rss_mb"] = round(row["collector_rss_mb"] + row["eslogger_rss_mb"], 1)
                 rows.append(row)
