@@ -1,0 +1,29 @@
+id: MD-0033
+title: Ad-hoc signed program run from a cache or temp folder
+title_th: รันโปรแกรมที่เซ็นแบบ ad-hoc จากโฟลเดอร์ cache หรือโฟลเดอร์ชั่วคราว
+status: experimental
+description: A program without a developer or Apple signature ran from a user cache, shared or temporary folder. Copied and re-signed system tools and dropped payloads run from these places; normal apps are developer-signed.
+plain_th: มีโปรแกรมที่ไม่ได้ลงนามโดยผู้พัฒนาหรือ Apple ถูกรันจากโฟลเดอร์ชั่วคราว ซึ่งเป็นที่ที่ผู้โจมตีนิยมวางโปรแกรม
+author: Saharad
+version: v2
+tags:
+- attack.stealth
+- attack.t1036
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    SignatureType:
+    - adhoc
+    - other
+    Image|contains:
+    - /Library/Caches/
+    - /private/var/folders/
+    - /Users/Shared/
+    - /private/tmp/
+    - /tmp/
+  condition: selection
+falsepositives:
+- โปรแกรมที่นักพัฒนา build เองแล้วรันจากโฟลเดอร์ชั่วคราว
+level: medium

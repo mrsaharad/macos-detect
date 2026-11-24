@@ -100,6 +100,7 @@ POSITIVE = {
     "MD-0031": ev_file("close", "/Users/u/.zshrc", modified=True, size=420),
     "MD-0032": ev_exec_signed("/Users/u/Library/Caches/kc", ["kc", "find-generic-password", "-s", "x"],
                               "com.apple.security", sig="adhoc"),
+    "MD-0033": ev_exec_signed("/Users/u/Library/Caches/x/sv", ["sv"], "sv-55554944", sig="adhoc"),
 }
 
 # event ปกติที่ "ไม่ควร" ถูกจับ (เช่น noise จาก Cloudflare WARP ที่เจอใน log จริง)
@@ -124,6 +125,8 @@ BENIGN = [
     ev_btm("file:///Applications/Safari.app", 1, "/Applications/Safari.app/Contents/MacOS/Safari"),
     ev_exec_signed("/usr/bin/security", ["security", "list-keychains"], "com.apple.security"),
     ev_exec_signed("/Users/u/dev/a.out", ["./a.out"], "a.out-55554944", sig="adhoc"),       # โปรแกรมที่ build เอง
+    ev_exec_signed("/Users/u/Library/Caches/com.app/Updater", ["Updater"], "com.app.updater", sig="developer",
+                   team="ABCDE12345"),                                                         # ตัวอัปเดตที่ลงนามแล้ว
 ]
 
 
@@ -218,6 +221,16 @@ def main():
     ok = out_exit is None and 600 not in n.pid_image and 500 in n.pid_image
     fails += not ok
     print(f"{'✅' if ok else '❌'} exit ลบ pid 600 ออกจาก cache (เหลือ {sorted(n.pid_image)})")
+
+    # v2: redaction ต้องปิดรหัสผ่าน แต่ไม่แตะคำสั่งที่ใช้ -u ในความหมายอื่น (เคยพลาดกับ date -u)
+    from redact import redact
+    for raw, want in [("curl -u a:pw https://x", "curl -u a:[REDACTED] https://x"),
+                      ("date -u +%Y-%m-%dT%H:%M:%S", "date -u +%Y-%m-%dT%H:%M:%S"),
+                      ("tool --password=abc", "tool --password=[REDACTED]"),
+                      ("security find-generic-password -s svc", "security find-generic-password -s svc")]:
+        ok = redact(raw) == want
+        fails += not ok
+        print(f"{'✅' if ok else '❌'} redact: {raw} -> {redact(raw)}")
 
     # เขียนไฟล์ jsonl ตัวอย่างไว้ลองรัน collector แบบ --file
     out = os.path.join(ROOT, "tests", "sample_events.jsonl")

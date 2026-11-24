@@ -92,12 +92,12 @@ for row in $plan; do
   if [[ -z $nums ]]; then
     art_both $tech 2>&1 | tee -a $log
   else
-    for n in $all; do                       # ทีละ test: เว้นช่วง 3 วินาทีให้ event ของแต่ละ test แยกจากกัน
+    for n in $all; do                       # ทีละ test: เว้นช่วง 6 วินาที (event ของ btm มาช้ากว่าคำสั่ง 1–5 วินาที)
       num=${n%!}; [[ $n == *! ]] && runner=art_root || runner=art
       tstart=$(now)
       out=$($runner $tech -TestNumbers $num 2>&1)
       print -r -- "$out" | tee -a $log
-      sleep 3
+      sleep 6
       code=$(print -r -- "$out" | grep -o 'Exit code: -*[0-9]*' | tail -1 | grep -o -- '-*[0-9]*$')
       echo "$tech,$num,$grp,$([[ $n == *! ]] && echo 1 || echo 0),$tstart,$(now),${code:-NA}" >> $TRUNS
     done

@@ -18,8 +18,9 @@ _PATTERNS = [
      r"\1" + R),
     # Authorization: Bearer xxx / Basic xxx
     (re.compile(r"(?i)(authorization:\s*(?:bearer|basic|token)\s+)(\S+)"), r"\1" + R),
-    # curl -u user:pass / --user user:pass
-    (re.compile(r"(\s(?:-u|--user)\s+)([^\s:]+):(\S+)"), r"\1\2:" + R),
+    # curl/wget/http -u user:pass (เฉพาะโปรแกรมรับส่งข้อมูล — date -u, sudo -u ใช้ -u ความหมายอื่น)
+    (re.compile(r"(\b(?:curl|wget|http|https|git|svn|ftp|lftp)\b[^|;&]*?\s(?:-u|--user)\s+)([^\s:]+):(\S+)"),
+     r"\1\2:" + R),
     # URL ที่ฝัง user:pass@host
     (re.compile(r"(\b[a-z][a-z0-9+.-]*://[^\s/:@]+):([^\s/@]+)@"), r"\1:" + R + "@"),
     # mysql -pXXX (ติดกับ -p)
