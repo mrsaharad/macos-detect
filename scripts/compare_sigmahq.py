@@ -12,6 +12,7 @@ SigmaHQ ยังใช้เลขเทคนิคก่อน ATT&CK v19 จ
 
 ต้องมี data/third_party/sigma (git clone --depth 1 https://github.com/SigmaHQ/sigma.git data/third_party/sigma)
 รัน:  python scripts/compare_sigmahq.py      ผล: data/results/compare_sigmahq.json + .csv
+v2:   DETECT_DB="/Library/Application Support/macdetect/data/detect.db" python scripts/compare_sigmahq.py --v2
 """
 import csv
 import glob
@@ -27,7 +28,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import yaml  # noqa: E402
 from engine.rules import Rule, load_rules  # noqa: E402
-from report import (DB, EVASION, FIELDS, OUT, RUNS, STRESS_RUNS, TRIAL_RUNS, read_runs, tech_match,  # noqa: E402
+from report import (DB, EVASION, FIELDS, event_fields, OUT, RUNS, STRESS_RUNS, TRIAL_RUNS, read_runs, tech_match,  # noqa: E402
                     test_sessions, ts)
 
 SIGMA = os.path.join(ROOT, "data", "third_party", "sigma")
@@ -153,5 +154,98 @@ def main():
     print(f"\nบันทึกไว้ที่ {OUT}/compare_sigmahq.json และ .csv")
 
 
+def main_v2():
+    """v2: เทียบบนชุด hold-out eval2 (เฉพาะ test ที่ทำงานจริงตาม attacksim/eval2_results.csv), evasion v2
+    และช่วง baseline 8 ชม. 2 รอบ (baseline2, baseline3) ต้องตั้ง DETECT_DB เป็นฐานข้อมูลของ daemon
+    ผล: data/results/compare_sigmahq_v2.json + .csv (ไม่ทับผล v1)"""
+    global FIELDS
+    commit = subprocess.run(["git", "-C", SIGMA, "log", "-1", "--format=%h %cs"], capture_output=True,
+                            text=True).stdout.strip()
+    sets = {"ours": load_rules(os.path.join(ROOT, "rules")), "sigmahq": load_sigmahq()}
+    db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    FIELDS = event_fields(db)                 # รวมฟิลด์ของ v2 (FileSize, ExtAttr, ...)
+    result = {"sigmahq_commit": commit, "rules": {k: len(v) for k, v in sets.items()}, "db": DB}
+    print(f"กฎของเรา {len(sets['ours'])} ข้อ  vs  SigmaHQ macOS {len(sets['sigmahq'])} ข้อ (commit {commit})")
+
+    # ---- 1) eval2 ระดับ test และระดับเทคนิค ----
+    executed = {(r["technique"], r["test"]) for r in read_runs(os.path.join(ROOT, "attacksim", "eval2_results.csv"))
+                if r["executed"] == "yes"}
+    tests = [r for r in read_runs(os.path.join(ROOT, "data", "test_runs.csv"))
+             if r["set"] == "eval2" and (r["technique"], r["test"]) in executed]
+    per_test = []
+    for t in tests:
+        recs = events_between(db, ts(t["start_utc"]), ts(t["end_utc"]))
+        row = {"technique": t["technique"], "test": t["test"]}
+        for name, rules in sets.items():
+            h = hits(rules, recs)
+            row[f"{name}_detected"] = bool([r for r, _ in h if match_tech(r, t["technique"])])
+            row[f"{name}_any_alert"] = bool(h)
+            row[f"{name}_rules"] = " ".join(sorted({r.id for r, _ in h}))
+        per_test.append(row)
+    techs = sorted({r["technique"] for r in per_test})
+    res = {"tests": len(per_test), "techniques": len(techs)}
+    print(f"\n=== eval2 (hold-out): {len(per_test)} test ที่ทำงานจริง, {len(techs)} เทคนิค ===")
+    for name in sets:
+        dt = sum(r[f"{name}_detected"] for r in per_test)
+        dtech = sum(any(r[f"{name}_detected"] for r in per_test if r["technique"] == t) for t in techs)
+        anya = sum(r[f"{name}_any_alert"] for r in per_test)
+        res[name] = {"test_detected": dt, "technique_detected": dtech, "test_any_alert": anya}
+        print(f"  {name:8}: ตรงเทคนิค test {dt}/{len(per_test)}  เทคนิค {dtech}/{len(techs)}  "
+              f"มี alert ใดๆ {anya}/{len(per_test)}")
+    res["union_technique"] = sum(any(r["ours_detected"] or r["sigmahq_detected"] for r in per_test
+                                     if r["technique"] == t) for t in techs)
+    for r in per_test:
+        if r["ours_detected"] or r["sigmahq_detected"]:
+            print(f"    {r['technique']}-{r['test']}: ของเรา [{r['ours_rules']}]  SigmaHQ [{r['sigmahq_rules']}]")
+    result["eval2"] = res
+
+    # ---- 2) evasion v2 ----
+    ev = [r for r in read_runs(EVASION) if r["version"] == "v2"]
+    print("\n=== Evasion variant (v2) ที่มี alert จากกฎแต่ละชุด ===")
+    res = {}
+    for name, rules in sets.items():
+        c = Counter()
+        for r in ev:
+            h = bool(hits(rules, events_between(db, ts(r["start_utc"]), ts(r["end_utc"]))))
+            grp = "base" if r["kind"] == "base" else r["split"]
+            c[grp, "n"] += 1
+            c[grp, "d"] += h
+        res[name] = {g: [c[g, "d"], c[g, "n"]] for g in ("base", "dev", "eval")}
+        print(f"  {name:8}: base {c['base', 'd']}/{c['base', 'n']}  dev {c['dev', 'd']}/{c['dev', 'n']}  "
+              f"eval {c['eval', 'd']}/{c['eval', 'n']}")
+    result["evasion_v2"] = res
+
+    # ---- 3) baseline 8 ชม. x 2 รอบ (ใช้งานปกติ ไม่มีการโจมตี) ----
+    hours = {"baseline2": 8.0, "baseline3": 8.0}       # นับเฉพาะเวลาที่เครื่องทำงาน (measure_overhead.py)
+    fp = {k: Counter() for k in sets}
+    for run in read_runs(RUNS):
+        if run["set"] not in hours:
+            continue
+        for rec in events_between(db, ts(run["start_utc"]), ts(run["end_utc"])):
+            for name, rules in sets.items():
+                for r in rules:
+                    if r.matches(rec):
+                        fp[name][r.id] += 1
+    h = sum(hours.values())
+    print(f"\n=== การแจ้งเตือนช่วง baseline ({h:g} ชม.) ===")
+    result["baseline"] = {"hours": h}
+    for name in sets:
+        n = sum(fp[name].values())
+        result["baseline"][name] = {"alerts": n, "per_hour": round(n / h, 2), "by_rule": dict(fp[name])}
+        top = ", ".join(f"{k} ({v})" for k, v in fp[name].most_common(6))
+        print(f"  {name:8}: {n} alert = {n / h:.2f}/ชม.   {top}")
+
+    os.makedirs(OUT, exist_ok=True)
+    with open(os.path.join(OUT, "compare_sigmahq_v2.json"), "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(OUT, "compare_sigmahq_v2.csv"), "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(per_test[0]))
+        w.writeheader()
+        w.writerows(per_test)
+    print(f"\nบันทึกไว้ที่ {OUT}/compare_sigmahq_v2.json และ .csv")
+
+
 if __name__ == "__main__":
-    main()
+    if not os.path.isdir(SIGMA):
+        sys.exit("ไม่พบ data/third_party/sigma — git clone ก่อน (ดูหัวไฟล์)")
+    main_v2() if "--v2" in sys.argv else main()
